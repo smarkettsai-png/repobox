@@ -5,6 +5,10 @@ import unittest
 from pathlib import Path
 
 from _path import SCRIPTS  # noqa: F401
+
+# _path must update sys.path before importing action/scripts modules.
+# isort: split
+
 import entry
 
 META = {
@@ -91,7 +95,7 @@ class EntryTest(unittest.TestCase):
     def test_read_entry_splits_at_first_end(self):
         p = self.lib / "x.md"
         p.write_text("---\nrepo_id: 1\n---\n" + entry.START + "\nauto\n" + entry.END + "\nnote " + entry.END + " more\n", encoding="utf-8")
-        fm, user = entry.read_entry(p)
+        _fm, user = entry.read_entry(p)
         self.assertEqual(user, "\nnote " + entry.END + " more\n")
         self.assertEqual(entry.read_auto(p), "\nauto\n")
 
@@ -243,7 +247,7 @@ class EntryTest(unittest.TestCase):
     def test_write_entry_files_handles_yaml_dates_and_writes_sidecar_first(self):
         import datetime as dt
         p = self.lib / "owner__repo.md"
-        rec = dict(self.fm, analyzed_at=dt.datetime(2026, 10, 1, tzinfo=dt.timezone.utc),
+        rec = dict(self.fm, analyzed_at=dt.datetime(2026, 10, 1, tzinfo=dt.UTC),
                    sightings=[{"id": "a", "at": dt.date(2026, 10, 1)}])
         entry.write_entry_files(p, rec, "md text")
         side = json.loads((self.lib / "owner__repo.json").read_text(encoding="utf-8"))

@@ -97,7 +97,7 @@ def _local(name: str) -> str:
 def validate_svg(text: str) -> list[str]:
     if len(text.encode("utf-8")) > SVG_MAX_BYTES:
         return ["svg larger than 2 MiB"]
-    if re.search(r"<!DOCTYPE|<!ENTITY", text, re.I):
+    if re.search(r"<!DOCTYPE|<!ENTITY", text, re.IGNORECASE):
         return ["DOCTYPE/ENTITY not allowed"]
     try:
         root = ET.fromstring(text)
@@ -112,9 +112,8 @@ def validate_svg(text: str) -> list[str]:
         for raw_name, value in el.attrib.items():
             name = _local(raw_name)
             low = value.strip().lower()
-            if name.startswith("on") or name == "style":
-                errors.append(f"{tag}@{name}: attribute not allowed")
-            elif name not in SVG_ATTRS and not raw_name.startswith("{http://www.w3.org/2000/xmlns/}"):
+            if (name.startswith("on") or name == "style"
+                    or (name not in SVG_ATTRS and not raw_name.startswith("{http://www.w3.org/2000/xmlns/}"))):
                 errors.append(f"{tag}@{name}: attribute not allowed")
             elif "\\" in value or CONTROL.search(value):
                 errors.append(f"{tag}@{name}: escapes and control characters not allowed")

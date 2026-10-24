@@ -1,11 +1,14 @@
 import json
-import shutil
 import subprocess
 import tempfile
 import unittest
 from pathlib import Path
 
-from _path import FIXTURES, SCRIPTS  # noqa: F401
+from _path import FIXTURES, SCRIPTS
+
+# _path must update sys.path before importing action/scripts modules.
+# isort: split
+
 import entry
 import publish
 from helpers import ANALYSIS, meta, write_entry
@@ -35,8 +38,8 @@ class PublishTest(unittest.TestCase):
         p.write_text(content if isinstance(content, str) else json.dumps(content), encoding="utf-8")
         return p
 
-    def leg(self, iid, status="ok", m=None, summary=ANALYSIS, svg=SVG, entry_path=None, error=None,
-            capture_obj=None, raw=None, force=False, repo_id="auto", item_id=None, run=RUN):
+    def leg(self, iid, status="ok", m=None, summary=ANALYSIS, svg: str | None=SVG, entry_path=None, error=None,
+            capture_obj=None, raw=None, force=False, repo_id: str | int="auto", item_id=None, run=RUN):
         d = self.art / f"repobox-out-{iid}"
         d.mkdir()
         item = {"id": item_id or iid, "url": None, "capture": capture_obj, "raw": raw, "force": force}
@@ -285,7 +288,7 @@ class PublishTest(unittest.TestCase):
         self.inbox("20261018-2", capture())
         self.leg("20261018-2", status="dedup", entry_path="library/owner__repo.md")
         self.run_publish()
-        rec, user = self.md()
+        rec, _user = self.md()
         self.assertEqual([s["id"] for s in rec["sightings"]], ["old", "20261018-2"])
         self.assertEqual(rec["analysis"], {"model": "m"})
         text = p.read_text(encoding="utf-8")
@@ -316,7 +319,7 @@ class PublishTest(unittest.TestCase):
         write_entry(self.lib, "Bad/Side", 9)
         (self.lib / "bad__side.json").write_text("{broken", encoding="utf-8")
         p = subprocess.run([sys.executable, str(SCRIPTS / "publish.py"), "--artifacts", str(self.art), "--repo", str(self.repo)],
-                           capture_output=True, text=True)
+                           capture_output=True, text=True, check=False)
         self.assertEqual(p.returncode, 0, p.stderr)
         self.assertEqual(json.loads(p.stdout)["failed"], 0)
         self.assertIn("skipping", p.stderr)
@@ -342,24 +345,32 @@ class PushTest(unittest.TestCase):
         self.a, self.b = root / "a", root / "b"
         git(root, "clone", "-q", str(self.remote), str(self.a))
         for c in (self.a,):
-            git(c, "config", "user.email", "t@t"), git(c, "config", "user.name", "t")
+            git(c, "config", "user.email", "t@t")
+            git(c, "config", "user.name", "t")
         (self.a / "f.txt").write_text("base\n")
-        git(self.a, "add", "."), git(self.a, "commit", "-qm", "base"), git(self.a, "push", "-q", "origin", "HEAD:main")
+        git(self.a, "add", ".")
+        git(self.a, "commit", "-qm", "base")
+        git(self.a, "push", "-q", "origin", "HEAD:main")
         git(root, "clone", "-q", str(self.remote), str(self.b))
-        git(self.b, "config", "user.email", "t@t"), git(self.b, "config", "user.name", "t")
+        git(self.b, "config", "user.email", "t@t")
+        git(self.b, "config", "user.name", "t")
 
     def test_push_with_retry_rebases(self):
         (self.a / "inbox.json").write_text("{}\n")
-        git(self.a, "add", "."), git(self.a, "commit", "-qm", "phone"), git(self.a, "push", "-q", "origin", "HEAD:main")
+        git(self.a, "add", ".")
+        git(self.a, "commit", "-qm", "phone")
+        git(self.a, "push", "-q", "origin", "HEAD:main")
         (self.b / "library.md").write_text("x\n")
-        git(self.b, "add", "."), git(self.b, "commit", "-qm", "publish")
+        git(self.b, "add", ".")
+        git(self.b, "commit", "-qm", "publish")
         publish.push_with_retry(self.b, attempts=3)
         log = git(self.remote, "log", "--format=%s", "main").split()
         self.assertEqual(log[:2], ["publish", "phone"])
 
     def test_push_with_retry_gives_up_on_conflict(self):
         (self.a / "f.txt").write_text("phone\n")
-        git(self.a, "commit", "-qam", "phone"), git(self.a, "push", "-q", "origin", "HEAD:main")
+        git(self.a, "commit", "-qam", "phone")
+        git(self.a, "push", "-q", "origin", "HEAD:main")
         (self.b / "f.txt").write_text("publish\n")
         git(self.b, "commit", "-qam", "publish")
         with self.assertRaises(RuntimeError):

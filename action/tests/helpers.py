@@ -26,7 +26,7 @@ def write_entry(library: Path, full="Owner/Repo", rid=1, sightings=(), category=
     fm = entry.build_frontmatter(meta(full, rid, **meta_kw), dict(ANALYSIS, category=category), list(sightings),
                                  None, None, now="2026-10-01T00:00:00+00:00")
     svg_name = f"{stem}.svg" if svg else None
-    if svg:
+    if svg_name is not None:
         (library / svg_name).write_text("<svg/>", encoding="utf-8")
     path = library / f"{stem}.md"
     entry.write_entry_files(path, fm, entry.render_entry(fm, ANALYSIS, svg_name, user))

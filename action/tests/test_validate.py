@@ -2,6 +2,10 @@ import json
 import unittest
 
 from _path import FIXTURES
+
+# _path must update sys.path before importing action/scripts modules.
+# isort: split
+
 import taxonomy
 import validate
 
@@ -145,13 +149,16 @@ class SvgTest(unittest.TestCase):
 
 class CliTest(unittest.TestCase):
     def test_summary_cli_survives_malformed_taxonomy(self):
-        import subprocess, sys, tempfile
+        import subprocess
+        import sys
+        import tempfile
         from pathlib import Path
+
         from _path import SCRIPTS
         tmp = Path(tempfile.mkdtemp()) / "taxonomy.yml"
         tmp.write_text("categories: [unterminated\n", encoding="utf-8")
         p = subprocess.run([sys.executable, str(SCRIPTS / "validate.py"), "summary", str(FIXTURES / "summary_ok.json"),
-                            "--taxonomy", str(tmp)], capture_output=True, text=True)
+                            "--taxonomy", str(tmp)], capture_output=True, text=True, check=False)
         self.assertEqual(p.returncode, 0, p.stdout + p.stderr)
 
 

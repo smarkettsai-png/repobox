@@ -14,8 +14,9 @@ import re
 import subprocess
 import sys
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
+from typing import cast
 
 import entry
 import index
@@ -138,7 +139,7 @@ def load_leg(d: Path, repo: Path, cats: list[str]) -> Leg:
         if from_inbox:
             at = (capture or {}).get("captured_at")
             try:
-                datetime.fromisoformat(at)
+                datetime.fromisoformat(cast(str, at))
             except (TypeError, ValueError):
                 leg.error = "capture: bad captured_at"
                 return leg
@@ -167,10 +168,10 @@ def load_leg(d: Path, repo: Path, cats: list[str]) -> Leg:
 
 
 def _run_record(leg: Leg) -> dict:
-    result = leg.run.get("result") if isinstance(leg.run.get("result"), dict) else {}
-    usage = result.get("modelUsage") if isinstance(result.get("modelUsage"), dict) else {}
+    result = cast(dict, leg.run.get("result")) if isinstance(leg.run.get("result"), dict) else {}
+    usage = cast(dict, result.get("modelUsage")) if isinstance(result.get("modelUsage"), dict) else {}
     turns = result.get("num_turns")
-    tools = leg.run.get("tools") if isinstance(leg.run.get("tools"), dict) else {}
+    tools = cast(dict, leg.run.get("tools")) if isinstance(leg.run.get("tools"), dict) else {}
     return {
         "model": next((k for k in usage if isinstance(k, str)), None),
         "turns": turns if _is(turns, int) else None,
@@ -183,12 +184,12 @@ def _run_record(leg: Leg) -> dict:
 
 def _publish_group(repo: Path, legs: list[Leg], now: str) -> Leg:
     winner = min(legs, key=lambda l: (RANK[(l.status, l.svg is not None)], l.id))
-    meta = winner.meta
+    meta = cast(dict, winner.meta)
     rel = next((l.entry for l in legs if l.entry), None)
     target = repo / rel if rel else repo / "library" / f"{entry.slug(meta['full_name'])}.md"
     prev_fm = entry.read_record(target) if target.exists() else {}
     user = entry.read_entry(target)[1] if target.exists() else None
-    new = [entry.write_sighting(l.id, l.capture) for l in legs if l.from_inbox and l.capture]
+    new = [entry.write_sighting(cast(str, l.id), l.capture) for l in legs if l.from_inbox and l.capture]
     sightings = entry.merge_sightings(list(prev_fm.get("sightings") or []), new)
     target.parent.mkdir(parents=True, exist_ok=True)
     svg_path = target.with_suffix(".svg")
@@ -245,7 +246,7 @@ def _missing_legs(repo: Path, items: list | None, seen: set) -> list[Leg]:
 
 
 def run(artifacts: Path, repo: Path, now: str | None = None, items: list | None = None) -> dict:
-    now = now or datetime.now(timezone.utc).isoformat(timespec="seconds")
+    now = now or datetime.now(UTC).isoformat(timespec="seconds")
     cats = _load_taxonomy(repo)
     names = taxonomy.names(cats)
     dirs = sorted(d for d in Path(artifacts).iterdir() if d.is_dir()) if Path(artifacts).is_dir() else []
@@ -254,7 +255,7 @@ def run(artifacts: Path, repo: Path, now: str | None = None, items: list | None 
     groups: dict[int, list[Leg]] = {}
     for leg in legs:
         if leg.status in ("ok", "dedup"):
-            groups.setdefault(leg.meta["id"], []).append(leg)
+            groups.setdefault(cast(dict, leg.meta)["id"], []).append(leg)
     counts = {"ok": 0, "dedup": 0, "failed": 0, "failed_ids": []}
     for group in groups.values():
         try:

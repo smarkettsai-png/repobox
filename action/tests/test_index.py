@@ -4,6 +4,10 @@ import unittest
 from pathlib import Path
 
 from _path import SCRIPTS  # noqa: F401
+
+# _path must update sys.path before importing action/scripts modules.
+# isort: split
+
 import index
 import taxonomy
 from helpers import write_entry
@@ -54,7 +58,7 @@ class IndexTest(unittest.TestCase):
     def test_readme_truncates_description(self):
         write_entry(self.lib, "A/One", 1, description="字" * 300)
         text = index.render_readme(index.collect(self.lib), taxonomy.DEFAULT, today="2026-10-18")
-        line = next(l for l in text.splitlines() if "A/One" in l and "⭐" in l)
+        line = next(row for row in text.splitlines() if "A/One" in row and "⭐" in row)
         self.assertIn("字" * 160 + "…", line)
         self.assertNotIn("字" * 161, line)
 

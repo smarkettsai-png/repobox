@@ -4,6 +4,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from typing import cast
 
 from _path import SCRIPTS
 
@@ -12,13 +13,14 @@ KEYS = ["status", "error", "entry", "repo_id", "diagram", "rounds", "wall_s", "c
 
 def write(*args):
     out = Path(tempfile.mkdtemp()) / "status.json"
-    p = subprocess.run([sys.executable, str(SCRIPTS / "status.py"), str(out), *args], capture_output=True, text=True)
+    p = subprocess.run([sys.executable, str(SCRIPTS / "status.py"), str(out), *args], capture_output=True, text=True, check=False)
     return p.returncode, (json.loads(out.read_text()) if out.exists() else None), p.stderr
 
 
 class StatusTest(unittest.TestCase):
     def test_dedup_defaults_complete(self):
         code, s, _ = write("--status", "dedup", "--entry", "library/a__b.md", "--repo-id", "5")
+        s = cast(dict, s)
         self.assertEqual(code, 0)
         self.assertEqual(list(s), KEYS)
         self.assertEqual(s, {"status": "dedup", "error": None, "entry": "library/a__b.md", "repo_id": 5,
@@ -26,20 +28,23 @@ class StatusTest(unittest.TestCase):
 
     def test_failed_defaults_complete(self):
         _, s, _ = write("--status", "failed", "--error", "resolve: 404")
+        s = cast(dict, s)
         self.assertEqual(list(s), KEYS)
         self.assertEqual(s["error"], "resolve: 404")
 
     def test_ok_full(self):
         _, s, _ = write("--status", "ok", "--repo-id", "1", "--diagram", "--rounds", "2", "--wall-s", "300",
-                        "--claude-exit", "0")
+                            "--claude-exit", "0")
+        s = cast(dict, s)
         self.assertEqual((s["diagram"], s["rounds"], s["wall_s"], s["claude_exit"], s["entry"]), (True, 2, 300, 0, None))
 
     def test_empty_strings_mean_null(self):
         _, s, _ = write("--status", "ok", "--entry", "", "--repo-id", "", "--claude-exit", "")
+        s = cast(dict, s)
         self.assertEqual((s["entry"], s["repo_id"], s["claude_exit"]), (None, None, None))
 
     def test_bad_status_rejected(self):
-        code, s, _ = write("--status", "weird")
+        code, _s, _ = write("--status", "weird")
         self.assertNotEqual(code, 0)
 
 

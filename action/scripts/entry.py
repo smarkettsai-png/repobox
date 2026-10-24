@@ -8,7 +8,7 @@ from __future__ import annotations
 import html
 import json
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import yaml
@@ -19,10 +19,10 @@ USER_DEFAULT = "\n"
 # Entries rendered before 2026-10-18 carried an empty notes heading; it is dropped on rewrite.
 LEGACY_EMPTY_NOTES = "## 我的筆記"
 NOTE_MAX = 500
-_TAG = re.compile(r"<[^>]*>", re.S)
+_TAG = re.compile(r"<[^>]*>", re.DOTALL)
 _MD_SPECIAL = re.compile(r"([\\`*_\[\]()#!|~])")
 # GFM autolinks bare URLs and emails even without link syntax; these go into code spans.
-_AUTOLINK = re.compile(r"(?:https?://|www\.)\S+|[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", re.I)
+_AUTOLINK = re.compile(r"(?:https?://|www\.)\S+|[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", re.IGNORECASE)
 # Full record: written to the hidden sidecar library/<stem>.json.
 READING_KEYS = ("tagline", "intro", "examples", "requirements", "summary", "highlights")
 FM_KEYS = ("repo", "repo_id", "url", "description", "language", "stars", "stars_at", "license", "category",
@@ -113,7 +113,7 @@ def read_record(md_path: Path) -> dict:
     except (OSError, ValueError, UnicodeDecodeError) as e:
         raise ValueError(f"{side.name}: unreadable sidecar ({e.__class__.__name__})") from e
     if not isinstance(data, dict):
-        raise ValueError(f"{side.name}: sidecar is not an object")
+        raise ValueError(f"{side.name}: sidecar is not an object")  # noqa: TRY004 - Callers catch ValueError for invalid records.
     record.update(data)
     return record
 
@@ -163,7 +163,7 @@ def find_entry(library: Path, repo_id: int, full_name: str) -> Path | None:
 def build_frontmatter(meta: dict, analysis: dict | None, sightings: list[dict], prev: dict | None,
                       run: dict | None, now: str | None = None) -> dict:
     lic = meta.get("license")
-    now = now or datetime.now(timezone.utc).isoformat(timespec="seconds")
+    now = now or datetime.now(UTC).isoformat(timespec="seconds")
     fm = {
         "repo": meta["full_name"],
         "repo_id": meta["id"],
@@ -250,5 +250,5 @@ def _instant(s) -> datetime:
     try:
         t = datetime.fromisoformat(str(s.get("at")))
     except (AttributeError, TypeError, ValueError):
-        return datetime.min.replace(tzinfo=timezone.utc)
-    return t if t.tzinfo else t.replace(tzinfo=timezone.utc)
+        return datetime.min.replace(tzinfo=UTC)
+    return t if t.tzinfo else t.replace(tzinfo=UTC)

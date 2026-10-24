@@ -3,6 +3,10 @@ import unittest
 from pathlib import Path
 
 from _path import SCRIPTS  # noqa: F401
+
+# _path must update sys.path before importing action/scripts modules.
+# isort: split
+
 import taxonomy
 
 

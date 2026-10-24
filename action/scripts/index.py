@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 import re
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import entry
@@ -61,15 +61,15 @@ def _line(e: dict) -> str:
     text = " ".join(parts)
     if desc:
         text += f" — {entry.safe_text(desc)}"
-    raw_tags = e.get("tags") if isinstance(e.get("tags"), list) else []
-    tags = [t for t in raw_tags if isinstance(t, str) and TAG_RE.match(t)]
+    raw_tags = e.get("tags")
+    tags = [t for t in raw_tags if isinstance(t, str) and TAG_RE.match(t)] if isinstance(raw_tags, list) else []
     if tags:
         text += " " + " ".join(f"`{t}`" for t in tags)
     return text
 
 
 def render_readme(entries: list[dict], cats: list[dict], today: str | None = None) -> str:
-    today = today or datetime.now(timezone.utc).date().isoformat()
+    today = today or datetime.now(UTC).date().isoformat()
     ordered = _newest_first(entries)
     lines = ["# RepoBox 收藏庫", "", f"{len(entries)} 個 repo · 更新 {today}", "", "## 最近收藏", ""]
     lines += [_line(e) for e in ordered[:RECENT_N]] or ["（還沒有收藏）"]
@@ -90,7 +90,7 @@ def render_readme(entries: list[dict], cats: list[dict], today: str | None = Non
 
 def render_index(entries: list[dict]) -> str:
     data = {
-        "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "generated_at": datetime.now(UTC).isoformat(timespec="seconds"),
         "count": len(entries),
         "entries": _newest_first(entries),
     }

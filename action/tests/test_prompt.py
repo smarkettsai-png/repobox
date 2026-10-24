@@ -6,11 +6,15 @@ import unittest
 from pathlib import Path
 
 from _path import SCRIPTS
+
+# _path must update sys.path before importing action/scripts modules.
+# isort: split
+
 import prompt
 
 
 def run(*args):
-    p = subprocess.run([sys.executable, str(SCRIPTS / "prompt.py"), *args], capture_output=True, text=True)
+    p = subprocess.run([sys.executable, str(SCRIPTS / "prompt.py"), *args], capture_output=True, text=True, check=False)
     return p.returncode, p.stdout, p.stderr
 
 

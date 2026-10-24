@@ -34,7 +34,7 @@ def load(path: Path | None) -> list[dict]:
     cats, seen = [], set()
     for item in raw:
         if not isinstance(item, dict):
-            raise ValueError(f"taxonomy.yml: bad entry {item!r}")
+            raise ValueError(f"taxonomy.yml: bad entry {item!r}")  # noqa: TRY004 - load_or_default catches ValueError for invalid entries.
         name = item.get("name")
         if not isinstance(name, str) or not NAME_RE.match(name):
             raise ValueError(f"taxonomy.yml: bad category name {name!r}")

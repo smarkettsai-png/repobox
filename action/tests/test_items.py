@@ -6,6 +6,10 @@ import unittest
 from pathlib import Path
 
 from _path import SCRIPTS
+
+# _path must update sys.path before importing action/scripts modules.
+# isort: split
+
 import items
 
 GOOD = {"v": 1, "url": "https://github.com/a/b", "captured_at": "2026-10-18T10:00:00+08:00"}
@@ -101,7 +105,7 @@ class ItemsTest(unittest.TestCase):
     def test_cli_prints_one_json_line(self):
         self.put("20261018-1.json", GOOD)
         p = subprocess.run([sys.executable, str(SCRIPTS / "items.py"), "--inbox", str(self.inbox), "--url", "",
-                            "--run-id", "5"], capture_output=True, text=True)
+                            "--run-id", "5"], capture_output=True, text=True, check=False)
         self.assertEqual(p.returncode, 0)
         self.assertEqual(len(p.stdout.strip().splitlines()), 1)
         self.assertEqual(json.loads(p.stdout)[0]["id"], "20261018-1")
