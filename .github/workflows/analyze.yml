@@ -17,6 +17,7 @@ permissions:
   contents: read
 
 env:
+  MAX_REPO_KB: 512000
   CLAUDE_CODE_VERSION: 2.1.302
   ARCH_BLUEPRINT_SHA: 3d48c959c889701fa9f02c14830f1a05d23aab6b
 
@@ -133,6 +134,9 @@ jobs:
           gh api "repos/${BASH_REMATCH[1]}/$repo" > "$STAGE/meta.json" 2> "$RUNNER_TEMP/gh.err" || fail "$(head -c 200 "$RUNNER_TEMP/gh.err")"
           [ "$(jq -r .private "$STAGE/meta.json")" = "false" ] || { rm -f "$STAGE/meta.json"; fail "only public repos"; }
           full=$(jq -r .full_name "$STAGE/meta.json")
+          repo_kb=$(gh api "repos/$full" --jq .size 2> "$RUNNER_TEMP/gh.err") || fail "$(head -c 200 "$RUNNER_TEMP/gh.err")"
+          [[ "$repo_kb" =~ ^[0-9]+$ ]] || fail "invalid repo size"
+          [ "$repo_kb" -le "$MAX_REPO_KB" ] || fail "repo too large"
           {
             echo "full=$full"
             echo "repo_id=$(jq -r .id "$STAGE/meta.json")"
@@ -174,7 +178,7 @@ jobs:
           # Repo-supplied agent config (hooks, MCP servers, memory files) must never load;
           # --add-dir directories are CLAUDE.md sources, so strip them at every depth.
           rm -rf "$TARGET/.claude" "$TARGET/.mcp.json" "$TARGET/.git"
-          find "$TARGET" \( -name 'CLAUDE.md' -o -name 'CLAUDE.local.md' -o -name '.claude' \) -prune -exec rm -rf {} +
+          find "$TARGET" \( -name 'CLAUDE.md' -o -name 'CLAUDE.local.md' -o -name '.claude' -o -name '.mcp.json' -o -name '.git' \) -prune -exec rm -rf {} +
           find "$TARGET" -type l -delete
           git -C "$AB" init -q
           git -C "$AB" fetch -q --depth 1 https://github.com/cholateio/arch-blueprint "$ARCH_BLUEPRINT_SHA"

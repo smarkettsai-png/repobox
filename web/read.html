@@ -2,6 +2,9 @@
 <html lang="zh-Hant">
 <head>
   <meta charset="utf-8">
+  <!-- frame-ancestors 無法透過 meta 設定；需由部署端的 HTTP 標頭提供。 -->
+  <!-- 內嵌 CSS 以雜湊授權；修改樣式時須同步更新，JavaScript 僅允許同源檔案。 -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; connect-src https://api.github.com; object-src 'none'; base-uri 'none'; form-action 'self'; img-src 'self'; style-src 'self' 'sha256-//5xdlF1qfBFIt8NFYWU588MPQj+oyG0td97qjMvCP8='; style-src-attr 'none'; manifest-src 'self'; worker-src 'none'">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="referrer" content="no-referrer">
   <title>RepoBox</title>
