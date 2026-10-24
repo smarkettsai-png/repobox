@@ -154,6 +154,15 @@ pi 只負責把收藏寫進 `inbox/`、查詢狀態與讀回結果,不參與分�
 - 網頁已設 CSP;分析在無 Shell、只能讀指定目錄的受限 Claude Code 中執行。
 - 已設上限:單次最多處理 10 筆收藏,目標 repo 大小預檢 512000 KB,摘要 64 KiB,SVG 2 MiB。
 
+## 大小上限與 runner 空間
+
+- 收藏前,`analyze.yml` 用 GitHub 回報的 repo 大小(含完整歷史)與 `MAX_REPO_KB: 512000` 比較,超過就直接失敗,例如 `supabase/supabase` 約 2446 MB 會被擋下。
+- 通過後以 `git clone --depth 1` 只抓最新一版到 runner 暫存目錄,clone 有 8 分鐘 timeout,分析有 20 分鐘 timeout。
+- 沒有手動釋放空間的步驟:runner 是用完即丟的虛擬機,job 結束整台銷毀,不會累積。clone 後刪除 `.git`、`CLAUDE.md`、`.mcp.json` 與 symlink 是為了安全,不是為了省空間。
+- 預檢看的是含歷史的大小,但實際只抓最新一版,所以 512000 KB 偏保守,被擋的專案不一定真的抓不下來。
+- 要放寬就改 `MAX_REPO_KB`,推到 fork,再把 library 的 `uses:` 換成新的 40 字元 SHA。放寬後仍受 runner 磁碟、timeout 與模型讀取量限制。
+- 失敗檔留在 `inbox/failed/` 不影響後續收藏;重試前可先刪掉。
+
 ## 已知未驗證項目
 
 - 真實的 Claude 分析流程、Haiku 5.5 的品質與 xhigh 是否生效。
@@ -167,5 +176,6 @@ pi 只負責把收藏寫進 `inbox/`、查詢狀態與讀回結果,不參與分�
 | 收藏後沒有 workflow 執行 | PAT 是否有 Contents: Read and write、是否選對 repo;library 的 Actions 是否啟用 |
 | workflow 找不到 `analyze.yml` | `uses:` 的 SHA 是否完整且存在於 fork;fork 是公開的 |
 | 條目進 `inbox/failed/` | 該檔內的錯誤原因;Secret 是否設定;模型是否過載 |
+| `inbox/failed/` 錯誤為 `resolve: repo too large` | 目標 repo 超過 `analyze.yml` 的 `MAX_REPO_KB`(512000 KB,約 500 MB),在 clone 前就被拒絕,不會呼叫 Claude。見下方「大小上限」 |
 | 手機分享選單沒有 RepoBox | 是否已安裝成 App;見 5.1 |
 | 網頁顯示尚未設定 | 是否在同一個瀏覽器、同一個 origin 設定;是否被清除網站資料 |
