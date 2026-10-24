@@ -170,6 +170,7 @@ pi 只負責把收藏寫進 `inbox/`、查詢狀態與讀回結果,不參與分�
 - 流程不看 Claude 結束碼,而看產出檔案是否合格:預算耗盡時若摘要不完整,條目進 `inbox/failed/`,錯誤為 `summary: ...`;摘要完整只是圖沒畫完,則條目照常收錄、沒有圖。這個行為依程式碼推得,尚未端到端實測。
 - 每次 run 的 Step Summary(Verify outputs 步驟)會印出 `cost_usd per call`(每次呼叫的費用)與 `stop`(結束原因)。恢復的 session 可能回報累計費用,所以文件不把它們相加。
 - 第一筆成功分析(`google-research/harness2`)的實測:費用約 0.27 美元(API 換算價)、23 回合、455 秒、輸出約 10.4 萬 token(思考約 9.5 萬)。訂閱登入實際消耗的是訂閱額度,不是現金。
+- 大型 repo 實測(`supabase/supabase`,GitHub 回報約 2446 MB,通過 3000000 KB 預檢):費用約 0.16 美元、28 回合、分析 337 秒(整個 run 約 6.6 分鐘,clone 與安裝約 23 秒)、輸出約 7.5 萬 token(思考約 6.7 萬)、只讀了 11 個檔案、一次通過驗證、有出圖。結束原因 `success`,遠低於 4 美元上限。
 - 私人 library 的 workflow 會消耗你的 Actions 分鐘數,一筆約 8 分鐘。
 
 ## 已知未驗證項目
