@@ -1,0 +1,20 @@
+{
+  "rules": {
+    "MD033": {
+      "ignorePaths": ["README.md", "README.en.md"],
+      "reason": "README 刻意使用 <p> 與 <img width> 排版；其他 Markdown 仍檢查行內 HTML。"
+    },
+    "MD041": {
+      "ignorePaths": ["CLAUDE.md"],
+      "reason": "CLAUDE.md 僅含 Claude 的 @AGENTS.md 匯入指令，不是一般 Markdown 文件。"
+    },
+    "python-cross-language-method": {
+      "ignorePaths": ["action/tests/**"],
+      "reason": "測試呼叫專案自己的 items.collect 與 index.collect，並非誤用其他語言的方法。"
+    },
+    "python-path-traversal": {
+      "ignorePaths": ["action/tests/**"],
+      "reason": "測試只操作受控的暫存目錄；正式程式的路徑穿越檢查維持啟用。"
+    }
+  }
+}

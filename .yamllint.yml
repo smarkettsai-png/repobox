@@ -1,0 +1,11 @@
+extends: default
+rules:
+  document-start:
+    # GitHub Actions 工作流程不要求 YAML 文件起始標記。
+    ignore: |
+      .github/workflows/**
+  truthy:
+    # GitHub Actions 的 on: 是事件設定鍵，不是布林值。
+    ignore: |
+      .github/workflows/**
+# comments 維持預設：單一空格的行尾註解是真正的風格差異，不是假陽性。
