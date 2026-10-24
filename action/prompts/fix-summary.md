@@ -12,8 +12,15 @@ most 40 characters; stack 1-8 items of at most 30 characters; category from the
 original taxonomy. No control characters.
 alternatives: 0-4 objects with exactly name (1-40 characters, starts with a
 letter/digit/Chinese, then letters/digits/Chinese, spaces or . + # _ -), differs
-(10-120 characters), source (readme or model). If a name is not in the target
-README case-insensitively, repair source to model; never invent README evidence.
+(10-120 characters), source (readme, search, deepwiki, web or model). Only search
+requires an extra repo key, whose owner/name must occur in the original candidates;
+all other sources forbid repo. readme requires name in the target README;
+deepwiki/web require name with that source in the original validated research.
+Absent research means neither deepwiki nor web is allowed. Do not invent evidence.
+Compare both projects on deployment, license, language/runtime, database, scope or
+price. Keep each differs distinct; do not copy any continuous 30-character passage
+from README or brief description (ignore whitespace and case). If unsupported,
+remove the item or use unverified model knowledge, never fabricate a source.
 Model knowledge is unverified. fit has exactly tool, verdict (high/medium/low/none),
 reasons (1-3 items of 10-120 characters), how (1-3 items of 10-120 characters, or
 empty ONLY for none). tool is 1-30 characters and must not change.

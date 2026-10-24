@@ -89,7 +89,7 @@ PAT 只存在這個瀏覽器的 localStorage。
 
 在私人收藏庫根目錄新增 `profile.md`，不要放在 fork 或目標專案，也不修改公開範本。UTF-8 純文字的第一個非空行必須為 `# pi agent` 這類標題；工具名 1–30 字，首字為英文、數字或中文，其餘允許空格與 `. + # / -`。後續可描述 CLI、MCP、SKILL.md、extensions 能力與偏好；超過 4000 字截斷並警告。
 
-缺檔、不可讀、非 UTF-8 或標題不合法時省略 fit 並繼續；有效時產生工具適用性、理由與整合方式。profile.py 只解析一次，兩次驗證皆核對同一可信工具名與目標 README，不開放額外網路或工具權限。先把 library 的 workflow SHA 換成支援此功能的 40 字元 commit。
+缺檔、不可讀、非 UTF-8 或標題不合法時省略 fit 並繼續；有效時產生工具適用性、理由與整合方式。profile_state.py 只解析一次，兩次驗證皆核對同一可信工具名與目標 README，不開放額外網路或工具權限。先把 library 的 workflow SHA 換成支援此功能的 40 字元 commit。
 
 新報告另含解決問題、優勢、限制與同類比較；來源標成 README 提及／依模型知識，未驗證，不產生連結。舊條目到收藏庫 Actions 手動執行 workflow_dispatch、填專案 URL 即重跑；不做自動遷移。七個閱讀分頁可換行，缺欄位的分頁不出現。
 
@@ -159,8 +159,12 @@ pi 只負責把收藏寫進 `inbox/`、查詢狀態與讀回結果,不參與分�
   - 該帳號不要再開其他 Pages;若曾開過,先撤銷並換新 PAT。
   - 更穩的做法是用獨立帳號或組織放 fork,或使用自訂網域。
 - PAT 遺失或裝置遺失時,立刻撤銷該 PAT。
-- 網頁已設 CSP;分析在無 Shell、只能讀指定目錄的受限 Claude Code 中執行。
-- 已設上限:單次最多處理 10 筆收藏,目標 repo 大小預檢 3000000 KB,每次 Claude 呼叫的金額上限 4 美元,摘要 64 KiB,SVG 2 MiB。
+- 網頁已設 CSP。分析採兩階段、兩個 Claude 會話:腳本先取 GitHub 搜尋結果,R 研究可用 WebSearch、WebFetch(預設只限 `github.com`／`raw.githubusercontent.com`)及 DeepWiki MCP(`mcp.deepwiki.com`,只開 `ask_question` 與 `read_wiki_structure`,不開 `read_wiki_contents`);A 分析仍無網路、無 MCP。
+- R 只讀候選摘要、只寫研究結果,不能讀本機目標 repo、`stage/` 或 `/proc`;但能從網路取得目標公開內容。本機檔案隔離不等於目標內容完全隔離。研究失敗會退回無研究分析;搜尋缺檔或無效時,publish 用空候選集合拒絕 search 來源,不會退回不檢查模式。
+- 兩階段都沒有 Bash／shell,但 token 仍在 Claude 行程環境內,只靠無 Bash、`/proc` deny 與讀檔圍籬保護,不是 OS 沙箱。使用者已接受 SSRF、抓取頁面的間接提示注入、token 外送及訂閱額度濫用風險;私人位址／雲端 metadata 防護未完整驗證。
+- AT-D 必須先驗允許主機、外部主機及跨主機 redirect。只有證據完整且限制有效才維持預設 scoped;失敗或證據不足改成不限網域的 WebFetch(open),最終旗標組由 parent 驗收後填入,目前不宣稱通過。不要順便放寬其他工具或檔案權限。
+- AT6／注入測試只用非祕密 canary、使用者控制的接收端;本機 Read 必須確實嘗試且被拒才算通過,缺結果／無嘗試／截斷皆未驗證。完整原始 stream 的 `research-leak.json` token／canary 計數必須為 0,不能只看遮罩後 calls 就說沒有外洩。
+- 上限:目標 repo 大小預檢 3000000 KB,摘要 64 KiB,SVG 2 MiB;A 每次呼叫 4 美元／80 回合／20 分鐘,R 每次呼叫 1 美元／25 回合／動態最多 300 秒,job 仍為 30 分鐘。金額是 API 換算控制,不是訂閱或整筆硬上限。
 
 ## 大小上限與 runner 空間
 
@@ -179,7 +183,14 @@ pi 只負責把收藏寫進 `inbox/`、查詢狀態與讀回結果,不參與分�
 - 每次 run 的 Step Summary(Verify outputs 步驟)會印出 `cost_usd per call`(每次呼叫的費用)與 `stop`(結束原因)。恢復的 session 可能回報累計費用,所以文件不把它們相加。
 - 第一筆成功分析(`google-research/harness2`)的實測:費用約 0.27 美元(API 換算價)、23 回合、455 秒、輸出約 10.4 萬 token(思考約 9.5 萬)。訂閱登入實際消耗的是訂閱額度,不是現金。
 - 大型 repo 實測(`supabase/supabase`,GitHub 回報約 2446 MB,通過 3000000 KB 預檢):費用約 0.16 美元、28 回合、分析 337 秒(整個 run 約 6.6 分鐘,clone 與安裝約 23 秒)、輸出約 7.5 萬 token(思考約 6.7 萬)、只讀了 11 個檔案、一次通過驗證、有出圖。結束原因 `success`,遠低於 4 美元上限。
-- 私人 library 的 workflow 會消耗你的 Actions 分鐘數,一筆約 8 分鐘。
+- 以上為舊單階段歷史量測,不是本版兩階段驗收。私人 library 會消耗你的 Actions 分鐘數;新增研究後的實際時間尚待 AT-COST。
+
+| 新流程成本口徑 | 估計,不是實測 | AT-COST |
+|---|---|---|
+| R 額外研究 | +US$0.10–0.40、10–20 回合、+90–300 秒 | 待 parent 填入 |
+| R + A 合計 | 約 US$0.45–0.80 | 待 parent 填入 |
+
+AT-COST 驗收須記錄 R、A 各自金額／回合／Read 次數／牆鐘時間與 job 時間。A 含所有 resume;先確認回報是否累計,累計用末次／最大值,非累計才加總。`--max-budget-usd` 控制單次 API 換算金額,不是訂閱額度、請求次數或整筆 $4／$5 硬上限。若額外研究太貴,先減回合與 DeepWiki 呼叫,不要宣稱已達成本目標。另記 Prepare、budget mode／elapsed／rt,用 job `started_at` 及收尾時間校正 PRE_S／TAIL_S。詳見[規格](specs/repobox.md#成本)。
 
 ## 已知未驗證項目
 

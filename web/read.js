@@ -57,14 +57,16 @@ function tabs(rec) {
     if (limitations.length) d.append(el('h3', null, '限制'), bullets(limitations));
     return d;
   };
+  const sourceLabels = { readme: 'README 提及', search: 'GitHub 搜尋結果', deepwiki: 'DeepWiki 查詢,未逐字驗證', web: '網路搜尋,未逐字驗證', model: '依模型知識，未驗證' };
   const alternatives = (Array.isArray(rec.alternatives) ? rec.alternatives : [])
-    .filter((a) => a && text(a.name) && text(a.differs) && ['readme', 'model'].includes(a.source));
+    .filter((a) => a && text(a.name) && text(a.differs) && typeof a.source === 'string' && Object.hasOwn(sourceLabels, a.source));
   if (alternatives.length) views['同類比較'] = () => {
     const ul = el('ul');
     alternatives.forEach((a) => {
       const li = el('li');
+      const repo = a.source === 'search' && typeof a.repo === 'string' && /^[A-Za-z0-9-]{1,39}\/[A-Za-z0-9._-]{1,100}(?![\s\S])/.test(a.repo) ? ' ' + a.repo : '';
       li.append(el('b', null, a.name), el('p', null, a.differs),
-        el('small', 'source', a.source === 'readme' ? 'README 提及' : '依模型知識，未驗證'));
+        el('small', 'source', sourceLabels[a.source] + repo));
       ul.append(li);
     });
     return ul;

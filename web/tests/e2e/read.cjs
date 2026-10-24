@@ -250,6 +250,30 @@ const SHOTS = process.env.SHOTS || '';
     }
   }
 
+  {
+    const rec = JSON.parse(ENTRY);
+    rec.alternatives = [
+      { name: 'SearchAlt', differs: '採用不同的部署方式。', source: 'search', repo: 'Owner/Other.repo' },
+      { name: 'WikiAlt', differs: '採用不同的執行環境。', source: 'deepwiki' },
+      { name: 'WebAlt', differs: '採用不同的資料庫。', source: 'web' },
+      { name: 'BadRepo', differs: '不應顯示非法專案名稱。', source: 'search', repo: '<img src=x onerror="window.__reportPwned=1">' },
+      { name: 'UrlRepo', differs: '不應顯示網址。', source: 'search', repo: 'https://evil.example/x' },
+      { name: 'NewlineRepo', differs: '不應顯示換行專案名稱。', source: 'search', repo: 'Invalid/Repo\n' },
+      { name: 'UnknownAlt', differs: '不應顯示未知來源。', source: 'constructor', repo: 'Owner/Hidden' },
+    ];
+    o = await open({ routes: { [`/contents/library/${STEM}.json`]: { status: 200, body: JSON.stringify(rec) } } });
+    const tab = o.page.getByRole('tab', { name: '同類比較', exact: true });
+    if (await tab.count()) await tab.click();
+    const result = await o.page.evaluate(() => ({
+      text: document.querySelector('.panel').textContent,
+      elements: document.querySelectorAll('.panel a, .panel img, .panel [href], .panel [src], .panel [onerror]').length,
+      pwned: !!window.__reportPwned,
+    }));
+    expect('(sources) new labels and repo are plain text', ['GitHub 搜尋結果', 'Owner/Other.repo', 'DeepWiki 查詢,未逐字驗證', '網路搜尋,未逐字驗證'].every((s) => result.text.includes(s)) && result.elements === 0 && !result.pwned, JSON.stringify(result));
+    expect('(sources) invalid repos and unknown sources are hidden', !['<img', 'evil.example', 'Invalid/Repo', 'UnknownAlt', 'Owner/Hidden'].some((s) => result.text.includes(s)), JSON.stringify(result));
+    await done('(sources)', o);
+  }
+
   o = await open({ scheme: 'dark' });
   await done('(i) dark', o, 'read-dark');
 

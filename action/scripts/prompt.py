@@ -7,17 +7,18 @@ CLI: prompt.py analyze --full F --target T --out O --skill S --taxonomy <yml|-> 
 from __future__ import annotations
 
 import argparse
-import profile
 import string
 import sys
 from pathlib import Path
 
+import profile_state
 import taxonomy
 
 PROMPTS = Path(__file__).resolve().parent.parent / "prompts"
 ANALYZE = PROMPTS / "analyze.md"
 FIX = PROMPTS / "fix.md"
 FIX_SUMMARY = PROMPTS / "fix-summary.md"
+RESEARCH = PROMPTS / "research.md"
 
 
 def render(template: Path, **values: str) -> str:
@@ -31,6 +32,10 @@ def main(argv: list[str]) -> int:
     a = sub.add_parser("analyze")
     for flag in ("--full", "--target", "--out", "--skill", "--taxonomy", "--profile"):
         a.add_argument(flag, required=True)
+    a.add_argument('--ctx', default='-')
+    r = sub.add_parser('research')
+    r.add_argument('--ctx', required=True)
+    r.add_argument('--res', required=True)
     f = sub.add_parser("fix")
     f.add_argument("--out", required=True)
     f.add_argument("--check", required=True)
@@ -40,7 +45,7 @@ def main(argv: list[str]) -> int:
     args = ap.parse_args(argv)
     if args.kind == "analyze":
         try:
-            tool, body = (None, "") if args.profile == "-" else profile.load_state(Path(args.profile))
+            tool, body = (None, "") if args.profile == "-" else profile_state.load_state(Path(args.profile))
         except (OSError, UnicodeDecodeError, ValueError) as exc:
             print(f"profile: {exc}", file=sys.stderr)
             return 1
@@ -49,7 +54,9 @@ def main(argv: list[str]) -> int:
                  "No valid library profile: omit fit entirely (do not emit null).")
         cats = taxonomy.load_or_default(None if args.taxonomy == "-" else Path(args.taxonomy))
         text = render(ANALYZE, FULL=args.full, TARGET=args.target, OUT=args.out, SKILL=args.skill,
-                      TAXONOMY=taxonomy.render_for_prompt(cats), PROFILE=block)
+                      TAXONOMY=taxonomy.render_for_prompt(cats), PROFILE=block, CTX=args.ctx)
+    elif args.kind == 'research':
+        text = render(RESEARCH, CTX=args.ctx, RES=args.res)
     elif args.kind == "fix":
         check = Path(args.check).read_text(encoding="utf-8", errors="replace")
         text = render(FIX, OUT=args.out, CHECK=check)

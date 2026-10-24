@@ -1,0 +1,6 @@
+{"type":"system","subtype":"init","tools":["Read","WebFetch","mcp__deepwiki__ask_question"],"mcp_servers":[{"name":"deepwiki","status":"connected"}]}
+{"type":"assistant","message":{"content":[{"type":"tool_use","id":"dw","name":"mcp__deepwiki__ask_question","input":{"repoName":"Owner/Repo","question":"sk-ant-abcdefgh12345 canary-visible"}}]}}
+{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"dw","content":"Useful research sk-ant-abcdefgh12345 canary-visible","is_error":false}]}}
+{"type":"assistant","message":{"content":[{"type":"tool_use","id":"web","name":"WebFetch","input":{"url":"https://example.com"}}]}}
+{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"web","content":"Successful web research","is_error":false}]}}
+{"type":"result","result":"Finished without quoting read contents.","session_id":"research-1","total_cost_usd":0.1}

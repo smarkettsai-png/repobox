@@ -29,7 +29,7 @@ NEW_FIELDS = {
     "strengths": ["以簡單的介面降低日常操作成本。", "整合現有工具而不需更換開發流程。"],
     "limitations": ["需要自行維護執行環境與相關設定。"],
     "alternatives": [
-        {"name": name, "differs": "提供不同的整合方式與部署選擇。", "source": source}
+        {"name": name, "differs": f"{name} 提供不同的整合方式與部署選擇。", "source": source}
         for name, source in (("Firebase", "readme"), ("Appwrite", "model"), ("PocketBase", "model"))
     ],
 }
@@ -39,6 +39,95 @@ FIT = {"tool": "pi agent", "verdict": "high", "reasons": ["可以整合現有的
 
 def full_summary(**changes):
     return summary_with(**(NEW_FIELDS | changes))
+
+
+class ResearchTest(unittest.TestCase):
+    def test_alternative_search_requires_candidate_repo(self):
+        alt = {"name": "Other", "source": "search", "repo": "Owner/Other",
+               "differs": "提供另外一種不同的部署與管理方式。"}
+        text = full_summary(alternatives=[alt])
+        self.assertEqual(validate.validate_summary(text, CATS, candidates={"owner/other"}), [])
+        self.assertTrue(validate.validate_summary(text, CATS, candidates=set()))
+        self.assertTrue(validate.validate_summary(full_summary(alternatives=[{k: v for k, v in alt.items()
+                                                                          if k != "repo"}]), CATS))
+        for repo in ("bad", "x/../y", 4, "x/y\n"):
+            self.assertTrue(validate.validate_summary(full_summary(alternatives=[dict(alt, repo=repo)]), CATS))
+        self.assertTrue(validate.validate_summary(full_summary(alternatives=[dict(alt, source="model")]), CATS))
+
+    def test_research_sources_need_successful_result(self):
+        for source in ("deepwiki", "web"):
+            item = {"name": "Other", "source": source, "notes": "提供不同的部署方式與整合功能。"}
+            text = json.dumps({"items": [item]})
+            for status in ("denied", "error", "no_result"):
+                run = {"tools": {source: True}, "calls": [{"status": status, "tool": source}]}
+                self.assertTrue(validate.validate_research(text, set(), validate.research_sources(run)))
+            sources = validate.research_sources({"tools": {source + "_ok": True}})
+            self.assertEqual(sources, {source})
+            self.assertEqual(validate.validate_research(text, set(), sources), [])
+            self.assertEqual(validate.research_sources({"tools": {source + "_ok": 1}}), set())
+
+    def test_research_schema_and_size(self):
+        item = {"name": "Other", "source": "search", "repo": "Owner/Other",
+                "notes": "提供不同的部署方式與整合功能。"}
+        good = json.dumps({"items": [item]})
+        self.assertEqual(validate.validate_research(good, {"OWNER/OTHER"}, set()), [])
+        self.assertTrue(validate.validate_research(good, set(), set()))
+        for data in ({}, [], {"items": [item] * 9}, {"items": [dict(item, extra=1)]},
+                     {"items": [dict(item, notes="https://evil.example")]},
+                     {"items": [dict(item, repo="bad")]}, {"items": [dict(item, source=[])]}):
+            self.assertTrue(validate.validate_research(json.dumps(data), {"Owner/Other"}, set()))
+        self.assertTrue(validate.validate_research(" " * (16 * 1024 + 1), set(), set()))
+        self.assertTrue(validate.validate_research("not json", set(), set()))
+
+    def test_research_membership_and_no_research(self):
+        alt = {"name": "Other", "source": "web", "differs": "提供另外一種不同的部署與管理方式。"}
+        text = full_summary(alternatives=[alt])
+        research = {"items": [{"name": "OTHER", "source": "web", "notes": "提供不同的部署方式與整合功能。"}]}
+        self.assertEqual(validate.validate_summary(text, CATS, research=research), [])
+        self.assertEqual(validate.validate_summary(text, CATS), [])
+        for unavailable in (None, {"items": []}, {"items": [dict(research["items"][0], source="deepwiki")]}):
+            self.assertTrue(validate.validate_summary(text, CATS, research=unavailable))
+
+    def test_differs_copying_readme_rejected(self):
+        copied = "這是專案用來展示不同工具功能以及實際部署維護選擇與操作管理方式的完整說明文字"
+        alt = {"name": "Other", "source": "model", "differs": copied}
+        text = full_summary(alternatives=[alt])
+        self.assertTrue(validate.validate_summary(text, CATS, readme_text="前文 " + copied + " 後文"))
+        self.assertTrue(validate.validate_summary(text, CATS, description=" \n".join(copied)))
+        self.assertEqual(validate.validate_summary(text, CATS, readme_text=copied[:29]), [])
+        self.assertEqual(validate.validate_summary(text, CATS, description="不相同的介紹"), [])
+
+    def test_differs_duplicate_ignores_whitespace_and_case(self):
+        a = {"name": "One", "source": "model", "differs": "ABC 提供另外一種不同的部署與管理方式。"}
+        b = dict(a, name="Two", differs="abc提供另外一種不同的部署與管理方式。")
+        self.assertTrue(validate.validate_summary(full_summary(alternatives=[a, b]), CATS))
+
+    def test_research_cli_and_summary_flags(self):
+        import contextlib
+        import io
+        import tempfile
+        from pathlib import Path
+
+        with tempfile.TemporaryDirectory() as tmp, contextlib.redirect_stdout(io.StringIO()):
+            root = Path(tmp)
+            candidates, research, run, summary, brief = [root / name for name in
+                                                       ("candidates", "research", "run", "summary", "brief")]
+            candidates.write_text(json.dumps({"items": [{"repo": "Owner/Other"}]}))
+            item = {"name": "Other", "source": "web", "notes": "提供不同的部署方式與整合功能。"}
+            research.write_text(json.dumps({"items": [item]}))
+            run.write_text(json.dumps({"tools": {"web_ok": True}}))
+            args = ["research", str(research), "--candidates", str(candidates), "--run-file", str(run)]
+            self.assertEqual(validate.main(args), 0)
+            run.write_text(json.dumps({"tools": {"web": True, "web_ok": False}}))
+            self.assertEqual(validate.main(args), 1)
+            alt = {"name": "Other", "source": "web", "differs": "提供另外一種不同的部署與管理方式。"}
+            summary.write_text(full_summary(alternatives=[alt]), encoding="utf-8")
+            brief.write_text(json.dumps({"description": "不同的介紹"}))
+            base = ["summary", str(summary), "--candidates", str(candidates), "--description-file", str(brief)]
+            self.assertEqual(validate.main(base + ["--research", str(research)]), 0)
+            self.assertEqual(validate.main(base + ["--no-research"]), 1)
+            research.write_text("not JSON")
+            self.assertEqual(validate.main(base + ["--research", str(research)]), 1)
 
 
 class SummaryTest(unittest.TestCase):
@@ -98,7 +187,9 @@ class SummaryTest(unittest.TestCase):
     def test_new_fields_reject_urls_and_controls(self):
         for payload in ("https://evil.example", "HTTPS://evil.example", "https&#58;//evil.example",
                         "https&amp;#58;//evil.example", "JavaScript:alert(1)", "www.evil.example",
-                        "data:text/plain,x", "vbscript:evil", "<b>文字</b>", "字\x00元", "字\n元", "字\x7f元"):
+                        "data:text/plain,x", "vbscript:evil", "<b>文字</b>", "字\x00元", "字\n元", "字\x7f元",
+                        "&lt;b&gt;文字&lt;/b&gt;", "&lt;a href=&quot;https://evil.example/x&quot;&gt;連結&lt;/a&gt;",
+                        "&amp;lt;b&amp;gt;文字"):
             prose = "這是用來測試不安全資料的文字 " + payload
             variants = [{field: [prose, prose]} for field in ("problems", "strengths", "limitations")]
             variants += [{"alternatives": [dict(NEW_FIELDS["alternatives"][0], **{field: prose})]}

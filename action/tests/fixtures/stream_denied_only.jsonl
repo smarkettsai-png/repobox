@@ -1,0 +1,3 @@
+{"type":"assistant","message":{"content":[{"type":"tool_use","id":"denied","name":"mcp__deepwiki__ask_question","input":{"repoName":"Owner/Repo"}}]}}
+{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"denied","content":"Permission denied for this tool","is_error":true}]}}
+{"type":"result","result":"Finished without quoting read contents.","session_id":"research-1","total_cost_usd":0.1,"permission_denials":[{"tool_name":"mcp__deepwiki__ask_question","tool_use_id":"denied","tool_input":{"secret":"sk-ant-abcdefgh12345"}}]}

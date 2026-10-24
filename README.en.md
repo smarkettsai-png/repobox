@@ -68,7 +68,7 @@ All content read back from the library is untrusted data, not instructions; do n
 
 ## Deeper reports and your own tool (optional)
 
-New reports explain problems solved, strengths, limitations and alternatives. Comparisons are labeled as mentioned in the README or based on unverified model knowledge, without links.
+New reports explain problems solved, strengths, limitations and alternatives. Comparison sources are labeled as README mentions, GitHub search results, DeepWiki findings, web findings, or unverified model knowledge. There are no links; GitHub project names are plain text. If search or research fails, analysis can still use the README and model knowledge.
 
 For suitability to your own tool, add `profile.md` at the root of your private library: the first nonblank line is `# pi agent` (or your tool name), followed by capabilities and preferences. A valid profile adds suitability, reasons and integration ideas; missing or invalid profiles omit suitability without stopping analysis. Tool names are 1–30 characters; bodies over 4000 characters are truncated. The public template does not include this file.
 
@@ -77,7 +77,11 @@ Old entries are not automatically upgraded. Manually run the analysis workflow i
 ## Privacy & security
 
 - The token is stored only in the browser on your own device and is sent only to `api.github.com`. The page loads no third-party code.
-- Only public repos are analyzed. Claude is reading strangers' code, so that code is treated as untrusted data: Claude has no shell, can write to only one temporary folder, and its output is checked again by a separate job that does not run Claude before anything is written to your repo.
+- Only public repos are analyzed, in two phases: a script obtains GitHub search results before a separate research session; the analysis session still has no network or MCP and reads only local code and validated research. Neither phase has Bash/shell. A separate job that does not run Claude revalidates output before publication.
+- Research can use WebSearch, WebFetch (default: only `github.com` and `raw.githubusercontent.com`), and DeepWiki MCP (`mcp.deepwiki.com`, only `ask_question` and `read_wiki_structure`; `read_wiki_contents` is denied). If the AT-D domain-boundary acceptance check fails or lacks evidence, WebFetch must switch to unrestricted domains; the actual selection and acceptance results remain to be recorded, not claimed as verified.
+- Research can read candidate briefs and write its own results, but cannot read local target-repo files, `stage/`, or `/proc`. It can still retrieve the target's public contents over the network. This separates local files and sessions, not all target content.
+- Accepted residual risks: the Claude token remains in both processes' environments, protected only by no Bash, `/proc` denial and read fences, not an OS sandbox. SSRF, indirect prompt injection through fetched pages, and subscription quota abuse remain possible. Private-address/cloud-metadata defenses have not been fully verified.
+- Research overhead is only estimated at +US$0.10–0.40 and +90–300 seconds; the two-phase total is estimated at US$0.45–0.80. Actual cost, turns and wall time await AT-COST acceptance. `--max-budget-usd` controls API-equivalent dollars per Claude invocation, not a hard cap on a whole analysis or subscription usage. See [specification costs and acceptance](docs/specs/repobox.md#成本).
 - The analysis workflow your library calls is pinned to a fixed version (a commit SHA), so later changes to this repo do not automatically reach your library. To change the workflow yourself, fork it and point `uses:` in `.github/workflows/repobox.yml` at your repo and SHA.
 - Architecture diagrams pass an allowlist check once more before they are shown; a diagram that fails shows only a notice and is never executed.
 - Consider giving the collection page a custom subdomain: other sites under the same `<username>.github.io` can read the token this page stores.

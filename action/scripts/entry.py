@@ -20,6 +20,12 @@ USER_DEFAULT = "\n"
 LEGACY_EMPTY_NOTES = "## 我的筆記"
 NOTE_MAX = 500
 _TAG = re.compile(r"<[^>]*>", re.DOTALL)
+_REPO_RE = re.compile(r"[A-Za-z0-9-]{1,39}/[A-Za-z0-9._-]{1,100}")
+_SOURCE_LABELS = {
+    "readme": "README 提及", "search": "GitHub 搜尋結果",
+    "deepwiki": "DeepWiki 查詢,未逐字驗證", "web": "網路搜尋,未逐字驗證",
+    "model": "依模型知識，未驗證",
+}
 _MD_SPECIAL = re.compile(r"([\\`*_\[\]()#!|~])")
 # GFM autolinks bare URLs and emails even without link syntax; these go into code spans.
 _AUTOLINK = re.compile(r"(?:https?://|www\.)\S+|[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", re.IGNORECASE)
@@ -202,7 +208,10 @@ def build_frontmatter(meta: dict, analysis: dict | None, sightings: list[dict], 
                 carried[k] = None
             elif k == "alternatives":
                 carried[k] = [{"name": to_plain(a["name"]), "differs": to_plain(a["differs"]),
-                               "source": a["source"]} for a in v]
+                               "source": a["source"],
+                               **({"repo": to_plain(a["repo"])} if a["source"] == "search"
+                                  and isinstance(a.get("repo"), str) and _REPO_RE.fullmatch(a["repo"]) else {})}
+                              for a in v]
             elif k == "fit":
                 carried[k] = {"tool": to_plain(v["tool"]), "verdict": v["verdict"],
                               "reasons": [to_plain(x) for x in v["reasons"]],
@@ -228,7 +237,12 @@ def _auto_block(analysis: dict, svg_name: str | None) -> str:
     if alternatives := analysis.get("alternatives"):
         lines = []
         for alt in alternatives:
-            source = "README 提及" if alt["source"] == "readme" else "依模型知識，未驗證"
+            source = _SOURCE_LABELS.get(alt["source"])
+            if source is None:
+                continue
+            repo = alt.get("repo")
+            if alt["source"] == "search" and isinstance(repo, str) and _REPO_RE.fullmatch(repo):
+                source += " " + repo
             lines.append(f"- {safe_text(alt['name'])}：{safe_text(alt['differs'])}（{safe_text(source)}）\n")
         parts.append("\n## 同類比較\n\n" + "".join(lines))
     if fit := analysis.get("fit"):

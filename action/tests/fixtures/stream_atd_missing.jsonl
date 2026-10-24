@@ -1,0 +1,3 @@
+{"type":"assistant","message":{"content":[{"type":"tool_use","id":"f0","name":"WebFetch","input":{"url":"https://github.com/tester/repobox-atd-probe/blob/main/probe.txt","prompt":"Return the marker only"}},{"type":"tool_use","id":"f1","name":"WebFetch","input":{"url":"https://raw.githubusercontent.com/tester/repobox-atd-probe/main/probe.txt","prompt":"Return the marker only"}}]}}
+{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"f0","content":"RBX-ATD-ALLOWED"},{"type":"tool_result","tool_use_id":"f1","content":"RBX-ATD-ALLOWED"}]}}
+{"type":"result","subtype":"success","permission_denials":[]}

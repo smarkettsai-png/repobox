@@ -134,5 +134,36 @@ class PromptTest(unittest.TestCase):
         self.assertIn("4-20", out)
 
 
+class ResearchPromptTest(unittest.TestCase):
+    def test_research_isolated_paths_and_limits(self):
+        code, out, err = run('research', '--ctx', '/ctx', '--res', '/res')
+        self.assertEqual(code, 0, err)
+        for value in ('/ctx/brief.json', '/ctx/candidates.json', '/res/research.json',
+                      'ask_question', 'WebFetch', 'at most 5', 'untrusted', 'source', '10-300'):
+            self.assertIn(value, out)
+        self.assertNotIn('$', out)
+        for value in ('/target', '/stage', 'summary.json', 'diagram.svg'):
+            self.assertNotIn(value, out)
+
+    def test_analyze_ctx_and_source_rules(self):
+        code, out, err = run('analyze', '--full', 'a/b', '--target', '/t', '--out', '/o',
+                             '--skill', '/s', '--taxonomy', '-', '--ctx', '/ctx')
+        self.assertEqual(code, 0, err)
+        for value in ('/ctx/candidates.json', '/ctx/research.json', 'may not exist', 'untrusted',
+                      'readme', 'search', 'deepwiki', 'web', 'model', 'repo', 'deployment',
+                      '30', 'both', 'distinct'):
+            self.assertIn(value, out)
+        self.assertNotIn('$', out)
+
+    def test_fix_summary_preserves_source_evidence(self):
+        with tempfile.TemporaryDirectory() as directory:
+            errors = Path(directory) / 'errors.txt'
+            errors.write_text('source error', encoding='utf-8')
+            code, out, err = run('fix-summary', '--out', '/o', '--errors', str(errors))
+            self.assertEqual(code, 0, err)
+            for value in ('search', 'deepwiki', 'web', 'repo', '30', 'distinct'):
+                self.assertIn(value, out)
+
+
 if __name__ == "__main__":
     unittest.main()

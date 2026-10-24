@@ -3,6 +3,7 @@ import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from _path import FIXTURES, SCRIPTS
 
@@ -58,6 +59,87 @@ class PublishTest(unittest.TestCase):
         (d / "status.json").write_text(json.dumps(st))
         return d
 
+    def test_publish_missing_candidates_is_empty_set(self):
+        for source in ("readme", "model", "search"):
+            with self.subTest(source=source):
+                summary = dict(ANALYSIS, alternatives=[self.alternative(source)])
+                d = self.leg(f"dispatch-{source}", summary=summary)
+                with patch.object(publish.validate, "validate_summary", return_value=[]) as check:
+                    leg = publish.load_leg(d, self.repo, ["dev-tool"])
+                self.assertEqual(leg.status, "ok")
+                self.assertEqual(check.call_args.kwargs["candidates"], set())
+                self.assertIsNone(check.call_args.kwargs["research"])
+        # Legacy/model-only artifacts still publish; search claims need candidates.
+        for source in ("readme", "model"):
+            summary = dict(ANALYSIS, alternatives=[self.alternative(source)])
+            d = self.leg(f"dispatch-legacy-{source}", summary=summary)
+            self.assertEqual(publish.load_leg(d, self.repo, ["dev-tool"]).status, "ok")
+
+    def test_publish_invalid_candidates_is_empty_set(self):
+        invalid = ("{", "null", '[]', '{}', '{"items":{}}',
+                   '{"items":[{"repo":"not a repo"}]}', '{"items":[{}]}',
+                   '{"items":[{"repo":"Good/Repo"},null]}')
+        for i, text in enumerate(invalid):
+            with self.subTest(text=text):
+                d = self.leg(f"dispatch-invalid-{i}")
+                (d / "candidates.json").write_text(text, encoding="utf-8")
+                with patch.object(publish.validate, "validate_summary", return_value=[]) as check:
+                    leg = publish.load_leg(d, self.repo, ["dev-tool"])
+                self.assertEqual(leg.status, "ok")
+                self.assertEqual(check.call_args.kwargs["candidates"], set())
+
+    def alternative(self, source):
+        alt = {"name": "Other", "source": source,
+               "differs": "同類專案著重命令列批次操作，適合不同部署需求"}
+        if source == "search":
+            alt["repo"] = "Other/Repo"
+        return alt
+
+    def test_publish_rejects_search_alt_without_candidates(self):
+        summary = dict(ANALYSIS, alternatives=[self.alternative("search")])
+        d = self.leg("dispatch-no-candidates", summary=summary)
+        leg = publish.load_leg(d, self.repo, ["dev-tool"])
+        self.assertEqual(leg.status, "failed")
+        self.assertIn("summary.json", leg.error or "")
+
+    def test_publish_accepts_search_alt_with_candidates(self):
+        summary = dict(ANALYSIS, alternatives=[self.alternative("search")])
+        d = self.leg("dispatch-candidates", summary=summary)
+        (d / "candidates.json").write_text(json.dumps({"items": [{"repo": "other/repo"}]}))
+        self.assertEqual(publish.load_leg(d, self.repo, ["dev-tool"]).status, "ok")
+
+    def research_artifacts(self, iid, *, tools=None, run=True):
+        summary = dict(ANALYSIS, alternatives=[self.alternative("deepwiki")])
+        d = self.leg(iid, summary=summary)
+        (d / "research.json").write_text(json.dumps({"items": [{
+            "name": "Other", "source": "deepwiki", "notes": "提供不同部署方式與操作流程的同類專案"}]}))
+        if run:
+            (d / "research-run.json").write_text(json.dumps({"tools": tools or {}}))
+        return d
+
+    def test_publish_rejects_deepwiki_alt_with_denied_only_run(self):
+        d = self.research_artifacts("dispatch-denied", tools={"deepwiki": True, "deepwiki_ok": False})
+        leg = publish.load_leg(d, self.repo, ["dev-tool"])
+        self.assertEqual(leg.status, "failed")
+
+    def test_publish_rejects_research_without_valid_run(self):
+        for i, text in enumerate((None, "null", "{", "[]")):
+            with self.subTest(run=text):
+                d = self.research_artifacts(f"dispatch-bad-run-{i}", run=False)
+                if text is not None:
+                    (d / "research-run.json").write_text(text)
+                self.assertEqual(publish.load_leg(d, self.repo, ["dev-tool"]).status, "failed")
+
+    def test_publish_accepts_successful_research_and_records_only_flags(self):
+        d = self.research_artifacts("dispatch-research", tools={"deepwiki_ok": True, "web_ok": True})
+        leg = publish.load_leg(d, self.repo, ["dev-tool"])
+        self.assertEqual(leg.status, "ok")
+        record = publish._run_record(leg)
+        self.assertTrue(record["research"])
+        self.assertTrue(record["web"])
+        self.assertNotIn("calls", record)
+        self.assertNotIn("permission_denials", record)
+
     def run_publish(self):
         return publish.run(self.art, self.repo, now=NOW)
 
@@ -82,11 +164,15 @@ class PublishTest(unittest.TestCase):
         self.assertFalse(self.lib.exists())
 
     def test_symlink_artifact_inputs_are_rejected(self):
-        for i, name in enumerate(("item.json", "status.json", "meta.json", "summary.json", "diagram.svg", "run.json")):
+        names = ("item.json", "status.json", "meta.json", "summary.json", "diagram.svg", "run.json",
+                 "candidates.json", "research.json", "research-run.json", "research-leak.json")
+        for i, name in enumerate(names):
             for dangling in (False, True):
                 with self.subTest(name=name, dangling=dangling):
                     d = self.leg(f"dispatch-{i}-{dangling}")
                     victim = d.parent.parent / f"outside-{i}-{dangling}"
+                    if not (d / name).exists():
+                        (d / name).write_text("{}")
                     original = (d / name).read_bytes()
                     (d / name).unlink()
                     if not dangling:
@@ -189,7 +275,7 @@ class PublishTest(unittest.TestCase):
         fm, user = self.md()
         self.assertEqual(fm["repo_id"], 1)
         self.assertEqual(fm["analysis"], {"model": "claude-opus-5-5", "turns": 5, "wall_s": 200, "rounds": 1,
-                                          "deepwiki": True, "diagram": True})
+                                          "deepwiki": True, "research": False, "web": False, "diagram": True})
         self.assertEqual([s["id"] for s in fm["sightings"]], ["20261018-1"])
         self.assertEqual(fm["analyzed_at"], NOW)
         self.assertEqual(user, entry.USER_DEFAULT)

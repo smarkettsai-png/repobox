@@ -162,7 +162,7 @@ stack: [TypeScript, Node.js]
 
 收藏庫根目錄可放 `profile.md`（不是公開範本或目標專案），第一個非空行為 `# pi agent` 這類工具名標題，後面描述能力與偏好。名稱 1–30 字，首字限英文、數字或中文，其餘可加空格及 `. + # / -`；正文移除控制字元，超過 4000 字截斷並警告。缺檔、不可讀、非 UTF-8 或標題不合法時警告並省略 fit，仍繼續分析。
 
-`action/scripts/profile.py resolve <profile.md> <state.json>` 是唯一判定處，寫出 `{tool, body}` 至模型不可讀寫的 `$RUNNER_TEMP/profile.json`；prompt 只讀這個狀態。`profile.py summary-args <state.json> --target <dir>` 每行印一個參數：`--target`、目標路徑，以及 `--expect-tool`、工具名，或 `--no-fit`。損壞狀態 fail closed。兩次 summary 驗證都重新建立 VARGS，保留目標 README 核對；不擴增工具、網路或 MCP 權限。
+`action/scripts/profile_state.py resolve <profile.md> <state.json>` 是唯一判定處，寫出 `{tool, body}` 至模型不可讀寫的 `$RUNNER_TEMP/profile.json`；prompt 只讀這個狀態。`profile_state.py summary-args <state.json> --target <dir>` 每行印一個參數：`--target`、目標路徑，以及 `--expect-tool`、工具名，或 `--no-fit`。損壞狀態 fail closed。兩次 summary 驗證都重新建立 VARGS，保留目標 README 核對；不擴增工具、網路或 MCP 權限。
 
 閱讀頁提供解決什麼、優勢與限制、同類比較、工具適用性及原有三個分頁，七個分頁均可換行。缺欄位的舊條目不顯示新分頁並提示重新分析；手動執行收藏庫 workflow_dispatch 並填該 repo URL 即可重跑，不做批次遷移。
 
@@ -178,15 +178,19 @@ stack: [TypeScript, Node.js]
 
 1. **解析與查詢（腳本）：** 驗證收藏檔（`v`、網址、`captured_at`），呼叫 GitHub API 取得正式名稱、`repo_id`、metadata（自動跟隨改名轉址），只收公開 repo。以 `repo_id` 找既有條目；已經收過的（且不是強制重分析）只記 sighting，不跑 Claude。任何失敗都寫成 `failed` 狀態，交給寫回 job 搬到 `failed/`。
 2. **分析（Claude Code，用訂閱）：**
-   - 由腳本先對目標 repo 做淺層 clone。Claude 不發任何網路請求、不掛任何 MCP server。
-   - 參考資料：clone 下來的程式碼與 README。（2026-10-19 拿掉 DeepWiki MCP：它是選用的，卻讓可能被 prompt injection 的 Claude 有一條對外送任意文字的通道。）
+   - 由腳本淺層 clone 目標 repo，另以 GitHub API 預先搜尋同類專案；候選最多 10 筆、去重、排除自身／fork／封存／私人專案，失敗或逾時用空清單繼續。
+   - 2026-10-24 改採兩階段：先跑獨立研究會話 R，再跑分析會話 A。A 仍不發任何網路請求、不掛 MCP，只讀本機程式碼、README 與驗證後的候選／研究資料。2026-10-19 曾移除 DeepWiki；本版只在 R 恢復，並未讓 A 連網。
+   - R 可用 WebSearch、WebFetch（預設限 `github.com`／`raw.githubusercontent.com`）與 DeepWiki MCP（`https://mcp.deepwiki.com/mcp`，無需認證，只准 `mcp__deepwiki__ask_question` 與 `mcp__deepwiki__read_wiki_structure`，不開 `read_wiki_contents`）。網域規則是否有效由 AT-D 判定；未通過或證據不足就改用不限網域的 WebFetch，只有 parent 驗收後才能記錄最終旗標組。
+   - R 只讀唯讀 `ctx/brief.json`、`ctx/candidates.json`，只寫 `res/research.json`，不能讀本機目標 repo、`stage/` 或 `/proc`。但 R 可以透過 GitHub／DeepWiki 讀到目標的公開 README／程式碼：隔離的是本機檔案與會話，不是所有目標內容。Finalize 驗證後封住 `ctx/`；研究失敗則 A 使用 `--no-research`，不阻斷一般分析。
    - 輸出 `out/summary.json`：`tagline`（4–20 字白話副標，卡片的大字）、`intro`（30–300 字白話介紹）、`examples`（1–2 個使用情境、每個 10–120 字）、`requirements`（1–4 行使用門檻、每行 2–100 字）、`summary`（20–600 字、含中文）、`category`（taxonomy 之一）、`tags`（≤5，小寫）、`stack`（1–8 項）、`highlights`（2–3 句、每句 10–120 字、含中文）。限制寫在提示詞裡。
- 新增必填 `problems`、`strengths`（各 2–4 項）、`limitations`（1–4 項），每項 10–120 字且含中文；`alternatives`（0–4 項）含 `name`（1–40 字）、`differs`（10–120 字中文）、`source`（`readme`／`model`）。只有 README 確實提到名稱才用 `readme`，否則以 `model` 標成未驗證；來源不符由 fix-summary 修正。有效 profile 才加 `fit`：`tool` 必須等於可信工具名，`verdict` 為 high／medium／low／none，`reasons` 為 1–3 項、`how` 為 1–3 項（none 才可空），每項 10–120 字中文。所有新欄位禁止 URL／HTML，名稱與列舉不要求中文。
+ 新增必填 `problems`、`strengths`（各 2–4 項）、`limitations`（1–4 項），每項 10–120 字且含中文；`alternatives`（0–4 項）含 `name`（1–40 字）、`differs`（10–120 字中文）、`source`（`readme`／`search`／`deepwiki`／`web`／`model`），可另帶 GitHub `repo`（owner/name 純文字，不做連結）。`readme` 必須在 README 提到名稱；`search` 必須帶 repo 且存在於該次候選清單；`deepwiki`／`web` 必須在驗證後研究中有同名同來源項目，且該次 R 至少成功取得一次同類工具結果（只有 denied／error／no_result 的嘗試不算）；`model` 固定標成未驗證。沒有研究時拒絕 deepwiki／web，候選空清單時拒絕 search。來源不符交 fix-summary 修正；differs 不能重複或逐字複製 README／description 的連續 30 字。驗證器不能判斷英文意譯、差異敘述的正確性、模型幻覺，或證明個別項目真的來自所宣稱的頁面；它只能確認該次 R 曾成功使用同類工具。有效 profile 才加 `fit`：`tool` 必須等於可信工具名，`verdict` 為 high／medium／low／none，`reasons` 為 1–3 項、`how` 為 1–3 項（none 才可空），每項 10–120 字中文。所有新欄位禁止 URL／HTML，名稱與列舉不要求中文。
    - 輸出 `out/diagram.svg`：照 arch-blueprint 畫，提示詞要求跳過確認步、改為檢查每個節點都對應到實際路徑。
    - 修正迴圈：Claude 沒有 shell。summary 不合格 → 把驗證錯誤交回同一個對話（`--resume`）修一次；`check.py` 不過 → 把錯誤交回修，最多 2 輪。
 3. **驗證與寫回（腳本，獨立 job）：**
    - 分析 job 先驗一次：`out/` 只能有那兩個檔；summary 過 schema；SVG 過 `check.py` 與元素／屬性白名單，不過就省略架構圖、其他照寫。
    - 寫回 job **不信任** artifact，全部重驗：id 格式、路徑必須在 `library/` 內、`status.repo_id == meta.id`、既有條目的 `repo_id` 必須相符、summary 與 SVG 再驗一次。任何一項不過 → 該筆降級為失敗，不影響同批其他筆。收藏內容一律從 repo 自己的 `inbox/<id>.json` 讀，不從 artifact 讀。
+   - 重驗新 artifact：`candidates.json` 缺檔、無法解析或格式錯誤一律當空集合，絕不傳 `None` 退回不檢查模式；`research.json` 必須搭配合法 `research-run.json`，以 `research_sources` 的 `deepwiki_ok`／`web_ok` 重驗來源後才採用。缺少可用研究就用 `research=None` 拒絕 deepwiki／web。新 artifact 同樣禁止 symlink／越界路徑；舊條目不重驗。
+   - 條目只記 `analysis.research`、`analysis.web` 等布林摘要，不寫工具參數、回傳內容或 permission_denials；`research-leak.json` 留在 artifact 供驗收。
    - 同一批有多筆指向同一個 repo：以 `repo_id` 分組，挑有圖的分析結果，sighting 全部合併。
    - 寫入 `library/`、把收藏移到 `done/`／`failed/`、重產 `README.md` 與 `index.json`，整批一個 commit。push 遇到衝突就 rebase 後重試，最多 3 次。
    - 有任何一筆失敗，整個執行標成紅燈（GitHub 會寄通知），但其他筆照常寫入。
@@ -198,13 +202,14 @@ Claude 讀的是陌生 repo 的內容，要當成可能含有 prompt injection �
 - 分析與寫回分成兩個 job。分析 job 的 `GITHUB_TOKEN` 只有 `contents: read`，產出用 artifact 交給寫回 job，寫回 job 不跑 Claude，而且重驗所有 artifact（見步驟 3）。
 - 私人 repo 的 stub 以 **40 字元 commit SHA** 引用 reusable workflow：它把寫入權與 Claude token 交給公開 repo 的程式碼，用分支名等於讓任何推上公開 main 的 commit 在私人 repo 裡執行。更新分析 Action = 推上 `repobox` main 後，到收藏 repo 手動改這個 SHA。
 - 限制靠 CLI 參數強制，不靠提示詞：
-  - Claude 在空的工作資料夾啟動，並使用 `--restricted`：不讀任何設定檔，檔案工具只能碰 `--add-dir` 列出的資料夾（目標 repo、arch-blueprint、`out/`）；另以 `--settings` 開 `blockReadsOutsideWorkingDirectories`，Read／Glob／Grep 再圍一次。
+  - Claude 在空工作資料夾啟動，用 `--restricted` 不載入 repo 設定；檔案工具只准 `--add-dir` 的資料夾，另以 `blockReadsOutsideWorkingDirectories` 圍住 Read／Glob／Grep。A 可讀 target、arch-blueprint、ctx 與 out，只寫 out；R 只讀 ctx、只寫 res，不把 target／stage 加入可讀範圍。R 明確指定 `--mcp-config` 與 `--strict-mcp-config`，僅載入受控 DeepWiki 設定。
   - 啟動前遞迴刪除目標 repo 每一層的 `.claude/`、`.mcp.json`、`CLAUDE.md`、`CLAUDE.local.md` 和 `.git`；clone 用 `core.symlinks=false`、再刪掉所有 symlink，避免透過連結讀到資料夾外。
   - clone 前透過 GitHub API 查詢 repo 大小（KB）；超過 `MAX_REPO_KB`（預設 `3000000`，約 2.9 GiB）就以 `repo too large` 記錄該筆失敗，查詢失敗也記錄失敗，皆不自動重試；此為 API 大小初篩，並非 checkout 大小硬上限。
-  - `--tools Read Glob Grep Write Edit`：**沒有 Bash**。`--permission-mode dontAsk`，白名單外一律拒絕；白名單只有 `Read(//<target>/**)`、`Read(//<arch-blueprint>/**)`、`Read(//<out>/**)` 與 `Edit(//<out>/**)`（它同時放行該路徑的 Write；`//` 開頭才是絕對路徑），Glob／Grep 套用同一組 Read 規則；禁止讀取 `/proc`、禁止所有 `mcp__*`。
+  - A 使用 `--tools Read Glob Grep Write Edit`：**沒有 Bash**。`--permission-mode dontAsk`，白名單外一律拒絕；白名單只有 `Read(//<target>/**)`、`Read(//<arch-blueprint>/**)`、`Read(//<out>/**)` 與 `Edit(//<out>/**)`（它同時放行該路徑的 Write；`//` 開頭才是絕對路徑），Glob／Grep 套用同一組 Read 規則；禁止讀取 `/proc`、禁止所有 `mcp__*`。
   - Claude token 只交給 `claude` 程序本身：step 一開始把它搬進不 export 的 shell 變數，`check.py`、`validate.py` 等解析模型輸出的腳本都拿不到。
   - `out/` 啟動時是空的、只放模型輸出；流程控制檔（item、meta、status、run 紀錄）放在 Claude 看不到的 `stage/`，上傳的是 `stage/`（2026-10-18 以正式參數本機演練：讀寫 `stage/` 都被拒）。
-  - 不再使用 `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB`／bubblewrap：沒有 Bash 就沒有子程序可以拿到 token；而且 GitHub runner 的 AppArmor 擋下 bwrap（`bwrap: setting up uid map: Permission denied`，2026-10-17 實測），Bash 沙箱根本起不來。
+  - 不使用 `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB`／bubblewrap：GitHub runner 的 AppArmor 曾擋下 bwrap（2026-10-17 實測）。這不是 OS 沙箱；R 與 A 的 Claude 行程環境都仍持有訂閱 token，模型端只靠無 Bash、`Read(//proc/**)` deny 與讀檔圍籬保護，不能宣稱研究階段沒有 token。
+  - 使用者已接受殘餘風險：SSRF（不限網域時更大；私人位址／雲端 metadata 未完整驗證）、經抓取頁面與 DeepWiki 內容的間接提示注入、token 外送通道與訂閱額度濫用。輸入／輸出驗證不等於消除這些風險；新增網路內容不受原本本機 README 讀取大小限制保護。
   - arch-blueprint 釘在指定 commit 並設成唯讀；Claude Code 與 GitHub Actions 都釘版本。
   - 不做 headless Chrome 截圖檢查。
 - SVG 用 XML 解析後的元素／屬性白名單驗證（沒有 `style`、`script`、`foreignObject`、`image`、`a`），`fill`／`stroke`／`marker-*` 只接受精確文法（色碼或 `url(#id)`），拒絕任何反斜線跳脫與控制字元。
@@ -235,13 +240,26 @@ Claude 讀的是陌生 repo 的內容，要當成可能含有 prompt injection �
 
 ## 成本
 
-報告加深後預估每筆 0.30–0.50 美元、約 40 回合；若需摘要修正，預估另加 0.03–0.08 美元。費用口徑與實際成本、回合、讀檔數待驗收實測決定；保留每次呼叫 4 美元、80 回合及既有逾時上限。
+以下新研究成本都是估計，不是驗收量測。A 保留每次呼叫 `--max-budget-usd 4`、80 回合、20 分鐘；R 每次呼叫 `--max-budget-usd 1`、25 回合，動態行程 timeout 最多 300 秒（step 後援 6 分鐘），job 仍為 30 分鐘。Search 前由 budget.py 依真實經過時間保留完整 A 與收尾，不足就跳過搜尋／研究；連 A 都放不下則及早失敗。
+
+`--max-budget-usd` 只控制單次 `claude -p` 的 API 換算金額，每次 resume 都是另一個呼叫；它不是訂閱額度、網路請求數、Actions 分鐘或整筆分析 $4／$5 的硬上限。
+
+| 口徑 | 估計（非實測） | AT-COST 實測 |
+|---|---|---|
+| R 新增研究 | US$0.10–0.40、10–20 回合、90–300 秒 | 待 parent 驗收填入 |
+| A 加深報告 | US$0.30–0.50、約 40 回合 | 待 parent 驗收填入 |
+| 摘要修正 | 另加 US$0.03–0.08 | 待 parent 驗收填入 |
+| R + A 合計 | 約 US$0.45–0.80 | 待 parent 驗收填入 |
+
+AT-COST 必須分別記錄 R、A 的 API 等價金額、回合、Read 次數、牆鐘秒數及整個 job 時間；A 含首輪與所有 resume。先檢查 resume 回傳的 usage／turns 是否累計：累計用末次／最大值，非累計才加總，不能直接相加重複計費。對照舊 supabase 單階段基線 US$0.342／35 回合／518 秒（不是本版實測）；另記 Prepare、budget mode／elapsed／rt，校正 PRE_S／TAIL_S。真實費用仍待 parent 執行，不以估計冒充通過。
+
+AT-D／AT-SSRF／AT6 驗收也尚待 parent：AT-D 必須含允許主機、外部主機與跨主機 redirect 的證據，只有證據完整且限制成立才保留 scoped；缺 probe、網路錯誤或 redirect 外送證據都選 open。AT-SSRF 的 loopback canary 不證明所有私人位址／雲端 metadata 安全。AT6 只證明本機 Read 邊界，必須真的嘗試並被拒才算通過；沒有呼叫、缺結果或截斷是未驗證。注入測試只用非祕密 canary 與使用者控制的接收端，不能要求讀出 token。`research-leak.json` 對完整原始 stream 的 token／canary 命中計數必須為 0；遮罩或截斷後的 calls 不能單獨證明沒有外洩。
 
 | 項目 | 誰的資源 | 備註 |
 |---|---|---|
 | 收藏 repo | 使用者 | 私人 repo 免費 |
 | Actions | 使用者 | 私人 repo 免費方案每月 2000 分鐘。實測每筆新分析 3–9 分鐘（小 repo 約 2.5 分鐘、中型約 8 分鐘），重複收藏不到 1 分鐘 |
-| Claude | 使用者的訂閱 | 與日常使用共用額度；加深後預估每筆 0.30–0.50 美元，費用口徑及實際成本／回合／讀檔數待驗收實測決定 |
+| Claude | 使用者的訂閱 | 與日常使用共用額度；兩階段合計估計 US$0.45–0.80，非實測；AT-COST 實際成本／回合／讀檔數待填 |
 | 收藏網頁 | 各自 fork 的 GitHub Pages | 免費 |
 
 ## 分階段計畫

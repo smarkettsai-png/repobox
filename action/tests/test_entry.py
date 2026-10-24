@@ -61,6 +61,34 @@ class EntryTest(unittest.TestCase):
         self.assertIn("- 可以整合現有的開發工作流程。", text)
         self.assertIn("- 透過命令列工具連接專案服務。", text)
 
+    def test_alternative_search_repo_plain_text(self):
+        sources = {"search": "GitHub 搜尋結果", "deepwiki": "DeepWiki 查詢,未逐字驗證",
+                   "web": "網路搜尋,未逐字驗證"}
+        for source, label in sources.items():
+            alt = {"name": "Other", "differs": "採用不同的部署方式與執行環境。", "source": source}
+            if source == "search":
+                alt["repo"] = "Owner/Other.repo"
+            analysis = dict(ANALYSIS, alternatives=[alt])
+            fm = entry.build_frontmatter(META, analysis, [], None, RUN)
+            self.assertEqual(fm["alternatives"], [alt])
+            rendered = entry.render_entry(fm, analysis, None, None)
+            self.assertIn(label, rendered)
+            if source == "search":
+                self.assertIn("Owner/Other.repo", rendered)
+                self.assertNotIn("[Owner/Other.repo]", rendered)
+            self.assertNotIn("<a", rendered)
+
+    def test_alternative_invalid_repo_not_displayed(self):
+        for repo in ("https://evil.example/x", "bad/name\n", "<b>Owner/Repo</b>", 7, None):
+            alt = {"name": "Other", "differs": "不同的部署方式與執行環境。", "source": "search", "repo": repo}
+            analysis = dict(ANALYSIS, alternatives=[alt])
+            fm = entry.build_frontmatter(META, analysis, [], None, RUN)
+            self.assertNotIn("repo", fm["alternatives"][0])
+            rendered = entry.render_entry(fm, analysis, None, None)
+            self.assertIn("GitHub 搜尋結果", rendered)
+            self.assertNotIn("evil.example", rendered)
+            self.assertNotIn("Owner/Repo", rendered.split("## 同類比較", 1)[1])
+
     def test_render_missing_fit_and_legacy_sections(self):
         analysis = {k: v for k, v in ANALYSIS.items() if k != "fit"}
         fm = entry.build_frontmatter(META, analysis, [], None, RUN)

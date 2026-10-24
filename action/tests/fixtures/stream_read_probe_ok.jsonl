@@ -1,0 +1,3 @@
+{"type":"assistant","message":{"content":[{"type":"tool_use","id":"read","name":"Read","input":{"file_path":"/rt/stage/meta.json"}}]}}
+{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"read","content":"PRIVATE_READ_RESULT_DO_NOT_STORE","is_error":false}]}}
+{"type":"result","result":"Finished without quoting read contents.","session_id":"research-1","total_cost_usd":0.1}

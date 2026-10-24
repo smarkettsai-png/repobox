@@ -47,6 +47,8 @@ class Leg:
     summary: dict | None = None
     svg: str | None = None
     run: dict = field(default_factory=dict)
+    research: bool = False
+    research_run: dict = field(default_factory=dict)
     from_inbox: bool = False
     capture: dict | None = None
     raw: str | None = None
@@ -123,7 +125,8 @@ def load_leg(d: Path, repo: Path, cats: list[str]) -> Leg:
     try:
         if d.is_symlink() or d.parent.is_symlink() or d.resolve().parent != d.parent.resolve():
             raise Reject("artifact root is a symlink or outside artifact directory")
-        for name in ("item.json", "status.json", "meta.json", "summary.json", "diagram.svg", "run.json"):
+        for name in ("item.json", "status.json", "meta.json", "summary.json", "diagram.svg", "run.json",
+                     "candidates.json", "research.json", "research-run.json", "research-leak.json"):
             path = d / name
             if path.is_symlink() or path.resolve().parent != d.resolve():
                 raise Reject(f"{name}: symlink or outside artifact directory")
@@ -158,7 +161,31 @@ def load_leg(d: Path, repo: Path, cats: list[str]) -> Leg:
         summary, svg, run = None, None, {}
         if st["status"] == "ok":
             text = (d / "summary.json").read_text(encoding="utf-8") if (d / "summary.json").is_file() else ""
-            errs = validate.validate_summary(text, cats)
+            candidates = set()
+            try:
+                data = _read_json(d / "candidates.json")
+                items = data.get("items") if isinstance(data, dict) else None
+                if (isinstance(items, list) and len(items) <= 10
+                        and (d / "candidates.json").stat().st_size <= 16384
+                        and all(isinstance(it, dict) and isinstance(it.get("repo"), str)
+                                and re.fullmatch(r"[A-Za-z0-9-]{1,39}/[A-Za-z0-9._-]{1,100}", it["repo"])
+                                for it in items)):
+                    candidates = {it["repo"].casefold() for it in items}
+            except Reject:
+                pass  # Missing/malformed candidates must never enable unchecked mode.
+            research = None
+            try:
+                research_run = _read_json(d / "research-run.json")
+                if isinstance(research_run, dict):
+                    research_text = (d / "research.json").read_text(encoding="utf-8")
+                    sources = validate.research_sources(research_run)
+                    if not validate.validate_research(research_text, candidates, sources):
+                        research = json.loads(research_text)
+                        leg.research = True
+                        leg.research_run = research_run
+            except (Reject, OSError, ValueError, UnicodeDecodeError):
+                pass
+            errs = validate.validate_summary(text, cats, candidates=candidates, research=research)
             if errs:
                 raise Reject("summary.json: " + "; ".join(errs))
             summary = json.loads(text)
@@ -184,12 +211,17 @@ def _run_record(leg: Leg) -> dict:
     usage = cast(dict, result.get("modelUsage")) if isinstance(result.get("modelUsage"), dict) else {}
     turns = result.get("num_turns")
     tools = cast(dict, leg.run.get("tools")) if isinstance(leg.run.get("tools"), dict) else {}
+    research_tools = leg.research_run.get("tools", {})
+    if not isinstance(research_tools, dict):
+        research_tools = {}
     return {
         "model": next((k for k in usage if isinstance(k, str)), None),
         "turns": turns if _is(turns, int) else None,
         "wall_s": leg.wall_s,
         "rounds": leg.rounds,
-        "deepwiki": tools.get("deepwiki") is True,
+        "deepwiki": tools.get("deepwiki") is True or research_tools.get("deepwiki_ok") is True,
+        "research": leg.research,
+        "web": research_tools.get("web_ok") is True,
         "diagram": leg.svg is not None,
     }
 

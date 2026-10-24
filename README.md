@@ -68,7 +68,7 @@ export REPOBOX_LIBRARY="<owner>/repobox-library"
 
 ## 更深入的報告與個人工具（選用）
 
-新報告會說明解決什麼問題、優勢與限制、同類比較；比較來源會標示「README 提及」或「依模型知識，未驗證」，不含連結。
+新報告會說明解決什麼問題、優勢與限制、同類比較；比較來源分成「README 提及」、「GitHub 搜尋結果」、「DeepWiki 查得」、「網頁查得」或「依模型知識，未驗證」，不含連結，GitHub 專案名稱只顯示純文字。搜尋或研究失敗時仍可用 README／模型知識完成分析。
 
 若想知道專案適不適合自己的工具，可在私人收藏庫根目錄新增 `profile.md`：第一個非空行寫 `# pi agent`（或你的工具名），後面描述能力與偏好。有效時才產生該工具的適用性、理由與接法；缺檔或格式錯誤時省略適用性，分析仍繼續。工具名 1–30 字，正文超過 4000 字會截斷。公開範本不附此檔。
 
@@ -77,7 +77,11 @@ export REPOBOX_LIBRARY="<owner>/repobox-library"
 ## 隱私與安全
 
 - token 只存在你自己裝置的瀏覽器，只會送到 `api.github.com`。網頁不載入任何第三方程式碼。
-- 只分析公開 repo。Claude 讀的是陌生人的程式碼，所以當成不可信資料處理：它沒有 shell、只能寫一個暫存資料夾，產出要經過另一個不跑 Claude 的 job 重新檢查才會寫進你的 repo。
+- 只分析公開 repo，採兩階段：先由腳本取得 GitHub 搜尋結果，再開獨立研究會話；分析會話仍無網路、無 MCP，只讀本機程式碼及驗證後的研究資料。兩階段都沒有 Bash／shell，輸出由不跑 Claude 的獨立 job 重驗才寫回。
+- 研究階段可用 WebSearch、WebFetch（預設只准 `github.com`／`raw.githubusercontent.com`），及 DeepWiki MCP（`mcp.deepwiki.com`，只准 `ask_question` 與 `read_wiki_structure`，不准 `read_wiki_contents`）。AT-D 網域限制驗收若失敗或證據不足，須切換成不限網域的 WebFetch；實際選擇與驗收結果待記錄，不能當成已驗證。
+- 研究會話只准讀候選摘要、寫自己的研究結果，不能讀本機目標 repo、`stage/` 或 `/proc`；但能經網路讀到目標的公開內容。這是本機檔案與會話隔離，不是內容完全隔離。
+- 已接受的殘餘風險：Claude token 仍在兩階段行程環境內，只靠無 Bash、`/proc` 禁讀與讀檔圍籬保護，不是 OS 沙箱；仍有 SSRF、抓取網頁帶來的間接提示注入與訂閱額度濫用風險。私人位址／雲端 metadata 防護未完整驗證。
+- 研究額外成本僅估計 +US$0.10–0.40、+90–300 秒，兩階段合計估計 US$0.45–0.80；AT-COST 實際成本、回合與牆鐘時間尚待驗收。`--max-budget-usd` 是每次 Claude 呼叫的 API 換算金額控制，不是整筆分析或訂閱額度的硬上限。詳見[規格成本與驗收](docs/specs/repobox.md#成本)。
 - 收藏庫呼叫的分析流程釘在固定版本（commit SHA），本 repo 之後的改動不會自動跑進你的收藏庫。想自己改流程，就 fork 後把 `.github/workflows/repobox.yml` 的 `uses:` 換成你的 repo 和 SHA。
 - 架構圖在顯示前會再過一次白名單，有問題的圖只顯示提示，不會被執行。
 - 建議幫收藏網頁綁一個自訂子網域：同一個 `<帳號>.github.io` 底下的其他網站讀得到這個網頁存的 token。

@@ -7,7 +7,7 @@ from pathlib import Path
 
 from _path import SCRIPTS
 
-import profile as profile_state  # isort: skip
+import profile_state  # isort: skip
 
 
 class ProfileTest(unittest.TestCase):
@@ -19,7 +19,7 @@ class ProfileTest(unittest.TestCase):
         self.state = self.root / "profile.json"
 
     def cli(self, *args):
-        return subprocess.run([sys.executable, str(SCRIPTS / "profile.py"), *map(str, args)],
+        return subprocess.run([sys.executable, str(SCRIPTS / "profile_state.py"), *map(str, args)],
                               capture_output=True, text=True, encoding="utf-8", check=False)
 
     def test_missing_file_invalid(self):
