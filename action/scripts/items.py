@@ -14,15 +14,15 @@ from pathlib import Path
 ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9-]{0,63}$")
 URL_RE = re.compile(r"^https://github\.com/[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9._-]+/?$")
 URL_MAX = 200
-# GitHub caps a matrix at 256 jobs; the rest waits for the next run (any push or an empty dispatch).
-MAX_ITEMS = 200
+# Bound expensive analyses per run; overflow waits for the next push or dispatch.
+MAX_ITEMS = 10
 
 
 def _check_capture(cap: dict) -> str | None:
     if cap.get("v") != 1:
         return "capture: v must be 1"
     url = cap.get("url")
-    if not isinstance(url, str) or len(url) > URL_MAX or not URL_RE.match(url):
+    if not isinstance(url, str) or len(url) > URL_MAX or not URL_RE.fullmatch(url):
         return "capture: url is not a GitHub repo URL"
     at = cap.get("captured_at")
     if not isinstance(at, str):
@@ -56,7 +56,7 @@ def collect(inbox: Path, url: str, run_id: str) -> list[dict]:
     for p in sorted(Path(inbox).glob("*.json")):
         if not p.is_file():
             continue
-        if not ID_RE.match(p.stem):
+        if not ID_RE.fullmatch(p.stem):
             skipped.append(p.name)
             continue
         out.append(_item(p))

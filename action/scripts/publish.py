@@ -83,7 +83,7 @@ def _check_meta(m) -> dict:
         raise Reject("meta.json is not an object")
     full = m.get("full_name")
     lic = m.get("license")
-    ok = (_is(m.get("id"), int) and isinstance(full, str) and FULL_RE.match(full)
+    ok = (_is(m.get("id"), int) and isinstance(full, str) and FULL_RE.fullmatch(full)
           and m.get("html_url") == f"https://github.com/{full}"
           and _is(m.get("description"), str, None) and _is(m.get("language"), str, None)
           and _is(m.get("stargazers_count"), int)
@@ -96,11 +96,15 @@ def _check_meta(m) -> dict:
 def _check_entry(repo: Path, rel, meta: dict) -> str | None:
     if rel is None:
         return None
-    if not isinstance(rel, str) or not ENTRY_RE.match(rel):
+    if not isinstance(rel, str) or not ENTRY_RE.fullmatch(rel):
         raise Reject("status.entry is not a library path")
-    path = (repo / rel).resolve()
-    if path.parent != (repo / "library").resolve() or not path.is_file():
-        raise Reject("status.entry is outside library or missing")
+    path = repo / rel
+    try:
+        entry.check_write_paths(path, repo / "library")
+    except ValueError as e:
+        raise Reject(str(e)) from e
+    if not path.is_file():
+        raise Reject("status.entry outside library or missing")
     fm, _ = entry.read_entry(path)
     if "repo_id" in fm:
         if fm["repo_id"] != meta["id"]:
@@ -112,11 +116,19 @@ def _check_entry(repo: Path, rel, meta: dict) -> str | None:
 
 def load_leg(d: Path, repo: Path, cats: list[str]) -> Leg:
     leg_id = d.name[len(PREFIX):] if d.name.startswith(PREFIX) else ""
-    if not ID_RE.match(leg_id):
+    if not ID_RE.fullmatch(leg_id):
         return Leg(id=None, status="failed", error=f"publish-reject: bad artifact name {d.name!r}")
     from_inbox, capture, raw = _inbox_source(repo, leg_id)
     leg = Leg(id=leg_id, status="failed", from_inbox=from_inbox, capture=capture, raw=raw)
     try:
+        if d.is_symlink() or d.parent.is_symlink() or d.resolve().parent != d.parent.resolve():
+            raise Reject("artifact root is a symlink or outside artifact directory")
+        for name in ("item.json", "status.json", "meta.json", "summary.json", "diagram.svg", "run.json"):
+            path = d / name
+            if path.is_symlink() or path.resolve().parent != d.resolve():
+                raise Reject(f"{name}: symlink or outside artifact directory")
+            if path.exists() and not path.is_file():
+                raise Reject(f"{name}: not a regular file")
         item = _read_json(d / "item.json")
         if not (isinstance(item, dict) and item.get("id") == leg_id
                 and _is(item.get("capture"), dict, None) and _is(item.get("raw"), str, None)):
@@ -183,13 +195,14 @@ def _run_record(leg: Leg) -> dict:
 
 
 def _publish_group(repo: Path, legs: list[Leg], now: str) -> Leg:
-    winner = min(legs, key=lambda l: (RANK[(l.status, l.svg is not None)], l.id))
+    winner = min(legs, key=lambda leg: (RANK[(leg.status, leg.svg is not None)], leg.id))
     meta = cast(dict, winner.meta)
-    rel = next((l.entry for l in legs if l.entry), None)
+    rel = next((leg.entry for leg in legs if leg.entry), None)
     target = repo / rel if rel else repo / "library" / f"{entry.slug(meta['full_name'])}.md"
+    entry.check_write_paths(target, repo / "library")
     prev_fm = entry.read_record(target) if target.exists() else {}
     user = entry.read_entry(target)[1] if target.exists() else None
-    new = [entry.write_sighting(cast(str, l.id), l.capture) for l in legs if l.from_inbox and l.capture]
+    new = [entry.write_sighting(cast(str, leg.id), leg.capture) for leg in legs if leg.from_inbox and leg.capture]
     sightings = entry.merge_sightings(list(prev_fm.get("sightings") or []), new)
     target.parent.mkdir(parents=True, exist_ok=True)
     svg_path = target.with_suffix(".svg")
@@ -238,7 +251,7 @@ def _missing_legs(repo: Path, items: list | None, seen: set) -> list[Leg]:
     out = []
     for it in items or []:
         iid = it.get("id") if isinstance(it, dict) else None
-        if isinstance(iid, str) and ID_RE.match(iid) and iid not in seen:
+        if isinstance(iid, str) and ID_RE.fullmatch(iid) and iid not in seen:
             from_inbox, capture, raw = _inbox_source(repo, iid)
             out.append(Leg(id=iid, status="failed", error="pipeline: no artifact (job timed out or was cancelled)",
                            from_inbox=from_inbox, capture=capture, raw=raw))
@@ -251,7 +264,7 @@ def run(artifacts: Path, repo: Path, now: str | None = None, items: list | None 
     names = taxonomy.names(cats)
     dirs = sorted(d for d in Path(artifacts).iterdir() if d.is_dir()) if Path(artifacts).is_dir() else []
     legs = [load_leg(d, repo, names) for d in dirs]
-    legs += _missing_legs(repo, items, {l.id for l in legs if l.id})
+    legs += _missing_legs(repo, items, {leg.id for leg in legs if leg.id})
     groups: dict[int, list[Leg]] = {}
     for leg in legs:
         if leg.status in ("ok", "dedup"):

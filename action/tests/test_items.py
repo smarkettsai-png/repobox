@@ -26,6 +26,42 @@ class ItemsTest(unittest.TestCase):
     def collect(self, url=""):
         return items.collect(self.inbox, url, "77")
 
+    def test_capture_url_requires_full_match(self):
+        for suffix in ("\n", "\r\n", " ", "/extra", "//"):
+            with self.subTest(suffix=suffix):
+                self.assertEqual(items._check_capture(dict(GOOD, url=GOOD["url"] + suffix)),
+                                 "capture: url is not a GitHub repo URL")
+
+    def test_capture_url_single_trailing_slash_still_accepted(self):
+        # Behavior kept from before the fullmatch change: one trailing slash is allowed.
+        self.assertIsNone(items._check_capture(dict(GOOD, url=GOOD["url"] + "/")))
+
+    def test_id_suffixes_are_skipped(self):
+        from unittest.mock import Mock, patch
+
+        for suffix in ("\n", "\r\n", " ", "/"):
+            with self.subTest(suffix=suffix):
+                candidate = Mock(stem="abc" + suffix, name="capture")
+                candidate.name = "abc" + suffix + ".json"
+                with patch.object(Path, "glob", return_value=[candidate]):
+                    self.assertEqual(self.collect(), [])
+                candidate.read_text.assert_not_called()
+
+    def test_eleventh_item_is_deferred_and_left_in_inbox(self):
+        from contextlib import redirect_stderr
+        from io import StringIO
+
+        for n in range(items.MAX_ITEMS + 1):
+            self.put(f"item-{n:02d}.json", GOOD)
+        stderr = StringIO()
+        with redirect_stderr(stderr):
+            got = self.collect()
+        self.assertEqual(items.MAX_ITEMS, 10)
+        self.assertEqual(len(got), items.MAX_ITEMS)
+        self.assertEqual(json.loads(stderr.getvalue()), {"skipped": [], "deferred": 1})
+        self.assertNotIn(f"item-{items.MAX_ITEMS:02d}", [item["id"] for item in got])
+        self.assertTrue((self.inbox / f"item-{items.MAX_ITEMS:02d}.json").exists())
+
     def test_dispatch_url_single_item_ignores_inbox(self):
         self.put("20261018-1.json", GOOD)
         self.assertEqual(self.collect("https://github.com/x/y"),

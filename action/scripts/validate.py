@@ -18,6 +18,7 @@ CJK = re.compile(r"[一-鿿]")
 TAG_RE = re.compile(r"^[a-z0-9][a-z0-9.+-]{0,39}$")
 STACK_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 .+#/-]{0,29}$")
 SUMMARY_KEYS = {"tagline", "intro", "examples", "requirements", "summary", "category", "tags", "stack", "highlights"}
+MAX_SUMMARY_BYTES = 64 * 1024
 SVG_MAX_BYTES = 2 * 1024 * 1024
 
 # Everything arch-blueprint's example and icon library use, plus a few harmless shape/text
@@ -47,6 +48,8 @@ CONTROL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 
 
 def validate_summary(text: str, categories: list[str]) -> list[str]:
+    if len(text.encode("utf-8")) > MAX_SUMMARY_BYTES:
+        return ["summary exceeds 64 KiB"]
     try:
         data = json.loads(text)
     except ValueError as e:
@@ -135,6 +138,10 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--taxonomy", type=Path)
     args = ap.parse_args(argv)
     try:
+        limit = MAX_SUMMARY_BYTES if args.kind == "summary" else SVG_MAX_BYTES
+        if args.file.stat().st_size > limit:
+            print("summary exceeds 64 KiB" if args.kind == "summary" else "SVG exceeds 2 MiB")
+            return 1
         text = args.file.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError) as e:
         print(f"cannot read {args.file}: {e}")

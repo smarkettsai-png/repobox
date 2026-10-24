@@ -16,6 +16,37 @@ OK = (FIXTURES / "stream_ok.jsonl").read_text().splitlines()
 
 
 class ClaudeStreamTest(unittest.TestCase):
+    def test_cli_caps_combined_sources_before_reading(self):
+        from unittest.mock import patch
+
+        source = str(FIXTURES / "stream_ok.jsonl")
+        size = (FIXTURES / "stream_ok.jsonl").stat().st_size
+        out = Path(tempfile.mkdtemp()) / "run.json"
+        with (patch.object(claude_stream, "MAX_STREAM_BYTES", size),
+              patch.object(Path, "open") as opened):
+            self.assertEqual(claude_stream.main([source, source, str(out)]), 1)
+            opened.assert_not_called()
+        self.assertFalse(out.exists())
+
+    def test_cli_accepts_exact_stream_byte_limit(self):
+        from unittest.mock import patch
+
+        source = FIXTURES / "stream_ok.jsonl"
+        out = Path(tempfile.mkdtemp()) / "run.json"
+        with patch.object(claude_stream, "MAX_STREAM_BYTES", source.stat().st_size):
+            self.assertEqual(claude_stream.main([str(source), str(out)]), 0)
+        self.assertEqual(json.loads(out.read_text())["result"]["session_id"], "sid-1")
+
+    def test_cli_bounded_read_rejects_growth_after_stat(self):
+        from unittest.mock import Mock, patch
+
+        source = FIXTURES / "stream_ok.jsonl"
+        out = Path(tempfile.mkdtemp()) / "run.json"
+        with (patch.object(claude_stream, "MAX_STREAM_BYTES", 16),
+              patch.object(Path, "stat", return_value=Mock(st_size=0))):
+            self.assertEqual(claude_stream.main([str(source), str(out)]), 1)
+        self.assertFalse(out.exists())
+
     def test_counts_tools(self):
         tools = claude_stream.summarize(OK)["tools"]
         self.assertEqual(tools["by_name"], {"Read": 2, "mcp__deepwiki__ask_question": 1, "Write": 1})

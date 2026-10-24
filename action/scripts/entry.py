@@ -118,7 +118,17 @@ def read_record(md_path: Path) -> dict:
     return record
 
 
+def check_write_paths(md_path: Path, library: Path) -> None:
+    """Reject redirected library roots and siblings before any reads or writes."""
+    if library.is_symlink() or library.resolve().parent != library.parent.resolve():
+        raise ValueError("library root is a symlink or outside its parent")
+    for path in (md_path, md_path.with_suffix(".json"), md_path.with_suffix(".svg")):
+        if path.is_symlink() or path.resolve().parent != library.resolve():
+            raise ValueError(f"{path.name}: symlink or outside library")
+
+
 def write_entry_files(md_path: Path, record: dict, md_text: str) -> None:
+    check_write_paths(md_path, md_path.parent)
     # Sidecar first: legacy entries keep their machine fields in the .md until this succeeds.
     # default=str turns YAML-parsed dates into strings.
     data = json.dumps({k: record.get(k) for k in FM_KEYS}, ensure_ascii=False, indent=2, default=str)

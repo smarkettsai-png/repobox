@@ -13,6 +13,8 @@ from collections.abc import Iterable
 from pathlib import Path
 
 RESULT_TEXT_MAX = 2000
+# Budget about 500 KiB per turn across the 130-turn analysis/repair ceiling.
+MAX_STREAM_BYTES = 64 * 1024 * 1024
 
 
 def summarize(lines: Iterable[str]) -> dict:
@@ -54,9 +56,19 @@ def main(argv: list[str]) -> int:
         return 1
     *sources, out = [Path(a) for a in argv]
     lines: list[str] = []
-    for src in sources:
-        if src.exists():
-            lines += src.read_text(encoding="utf-8", errors="replace").splitlines()
+    existing = [src for src in sources if src.exists()]
+    if sum(src.stat().st_size for src in existing) > MAX_STREAM_BYTES:
+        print("stream input exceeds 64 MiB", file=sys.stderr)
+        return 1
+    total = 0
+    for src in existing:
+        with src.open("rb") as stream:
+            data = stream.read(MAX_STREAM_BYTES - total + 1)
+        total += len(data)
+        if total > MAX_STREAM_BYTES:
+            print("stream input exceeds 64 MiB", file=sys.stderr)
+            return 1
+        lines += data.decode("utf-8", errors="replace").splitlines()
     record = summarize(lines)
     record["rounds_logged"] = len(sources)
     out.write_text(json.dumps(record, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")

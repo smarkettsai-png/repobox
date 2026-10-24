@@ -21,6 +21,18 @@ class IndexTest(unittest.TestCase):
     def setUp(self):
         self.lib = Path(tempfile.mkdtemp()) / "library"
 
+    def test_collect_rejects_repo_and_stem_suffixes(self):
+        from unittest.mock import patch
+
+        for suffix in ("\n", "\r\n", " ", "/"):
+            for field in ("repo", "stem"):
+                with self.subTest(suffix=suffix, field=field):
+                    stem = "a__one" + (suffix if field == "stem" else "")
+                    repo = "A/One" + (suffix if field == "repo" else "")
+                    with (patch.object(Path, "glob", return_value=[self.lib / (stem + ".md")]),
+                          patch.object(index.entry, "read_record", return_value={"repo": repo, "repo_id": 1})):
+                        self.assertEqual(index.collect(self.lib), [])
+
     def test_collect_reads_svg_presence_and_last_seen(self):
         write_entry(self.lib, "A/One", 1, [s("2026-10-01T00:00:00+00:00"), s("2026-10-05T00:00:00+08:00", "y")], svg=True)
         write_entry(self.lib, "B/Two", 2)

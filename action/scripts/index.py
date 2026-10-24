@@ -32,7 +32,7 @@ def collect(library: Path) -> list[dict]:
             print(f"index: skipping {p.name}: {e}", file=sys.stderr)
             continue
         repo, rid = fm.get("repo"), fm.get("repo_id")
-        if not (isinstance(repo, str) and FULL_RE.match(repo) and isinstance(rid, int) and STEM_RE.match(p.stem)):
+        if not (isinstance(repo, str) and FULL_RE.fullmatch(repo) and isinstance(rid, int) and STEM_RE.fullmatch(p.stem)):
             print(f"index: skipping {p.name}: frontmatter missing a valid repo/repo_id", file=sys.stderr)
             continue
         sightings = [s for s in fm.get("sightings") or [] if isinstance(s, dict)]
@@ -62,7 +62,7 @@ def _line(e: dict) -> str:
     if desc:
         text += f" — {entry.safe_text(desc)}"
     raw_tags = e.get("tags")
-    tags = [t for t in raw_tags if isinstance(t, str) and TAG_RE.match(t)] if isinstance(raw_tags, list) else []
+    tags = [t for t in raw_tags if isinstance(t, str) and TAG_RE.fullmatch(t)] if isinstance(raw_tags, list) else []
     if tags:
         text += " " + " ".join(f"`{t}`" for t in tags)
     return text

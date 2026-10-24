@@ -65,6 +65,120 @@ class PublishTest(unittest.TestCase):
         path = self.lib / f"{stem}.md"
         return entry.read_record(path), entry.read_entry(path)[1]
 
+    def symlink_or_skip(self, link, target, *, directory=False):
+        try:
+            link.symlink_to(target, target_is_directory=directory)
+        except (OSError, NotImplementedError) as e:
+            self.skipTest(f"OS cannot create symlinks: {e}")
+
+    def test_symlink_artifact_root_is_rejected(self):
+        outside = self.leg("dispatch-1")
+        moved = self.art.parent / "outside-artifact"
+        outside.rename(moved)
+        self.symlink_or_skip(outside, moved, directory=True)
+        before = {p.name: p.read_bytes() for p in moved.iterdir()}
+        self.assertEqual(self.run_publish()["failed"], 1)
+        self.assertEqual({p.name: p.read_bytes() for p in moved.iterdir()}, before)
+        self.assertFalse(self.lib.exists())
+
+    def test_symlink_artifact_inputs_are_rejected(self):
+        for i, name in enumerate(("item.json", "status.json", "meta.json", "summary.json", "diagram.svg", "run.json")):
+            for dangling in (False, True):
+                with self.subTest(name=name, dangling=dangling):
+                    d = self.leg(f"dispatch-{i}-{dangling}")
+                    victim = d.parent.parent / f"outside-{i}-{dangling}"
+                    original = (d / name).read_bytes()
+                    (d / name).unlink()
+                    if not dangling:
+                        victim.write_bytes(original)
+                    self.symlink_or_skip(d / name, victim)
+                    leg = publish.load_leg(d, self.repo, ["dev-tool"])
+                    self.assertEqual(leg.status, "failed")
+                    self.assertIn("symlink", leg.error or "")
+                    self.assertEqual(victim.read_bytes() if victim.exists() else None,
+                                     None if dangling else original)
+        self.assertFalse(self.lib.exists())
+
+    def check_symlink_sibling(self, suffix, *, existing=False, dangling=False, svg: str | None=SVG):
+
+        self.lib.mkdir()
+        md = self.lib / "owner__repo.md"
+        if existing:
+            write_entry(self.lib)
+        victim = self.repo.parent / "outside-target"
+        if not dangling:
+            victim.write_text("outside sentinel", encoding="utf-8")
+        link = md.with_suffix(suffix)
+        link.unlink(missing_ok=True)
+        self.symlink_or_skip(link, victim)
+        before = {p.name: p.read_bytes() for p in self.lib.iterdir() if not p.is_symlink()}
+        self.leg("dispatch-1", entry_path="library/owner__repo.md" if existing else None, svg=svg)
+        self.assertEqual(self.run_publish()["failed"], 1)
+        self.assertEqual({p.name: p.read_bytes() for p in self.lib.iterdir() if not p.is_symlink()}, before)
+        self.assertTrue(link.is_symlink())
+        self.assertEqual(victim.read_text(encoding="utf-8") if victim.exists() else None,
+                         None if dangling else "outside sentinel")
+
+    def test_symlink_markdown_is_rejected(self):
+        self.check_symlink_sibling(".md")
+
+    def test_symlink_json_sibling_is_rejected_before_new_markdown(self):
+        self.check_symlink_sibling(".json")
+
+    def test_symlink_svg_sibling_is_rejected_before_new_markdown(self):
+        self.check_symlink_sibling(".svg")
+
+    def test_symlink_json_sibling_is_rejected_for_existing_entry(self):
+        self.check_symlink_sibling(".json", existing=True)
+
+    def test_symlink_svg_sibling_is_rejected_instead_of_unlinked(self):
+        self.check_symlink_sibling(".svg", existing=True, svg=None)
+
+    def test_dangling_markdown_symlink_is_rejected(self):
+        self.check_symlink_sibling(".md", dangling=True)
+
+    def test_dangling_json_symlink_is_rejected(self):
+        self.check_symlink_sibling(".json", dangling=True)
+
+    def test_dangling_svg_symlink_is_rejected(self):
+        self.check_symlink_sibling(".svg", dangling=True)
+
+    def test_symlink_library_root_is_rejected(self):
+        outside = self.repo.parent / "outside-library"
+        outside.mkdir()
+        sentinel = outside / "sentinel"
+        sentinel.write_text("keep", encoding="utf-8")
+        self.symlink_or_skip(self.lib, outside, directory=True)
+        self.leg("dispatch-1")
+        self.assertEqual(self.run_publish()["failed"], 1)
+        self.assertEqual([p.name for p in outside.iterdir()], ["sentinel"])
+        self.assertEqual(sentinel.read_text(encoding="utf-8"), "keep")
+
+    def test_artifact_id_with_trailing_newline_is_rejected(self):
+        d = self.leg("dispatch-1")
+        for ending in ("\n", "\r\n", " "):
+            with self.subTest(ending=ending):
+                result = publish.load_leg(d.with_name(d.name + ending), self.repo, ["dev-tool"])
+                self.assertIsNone(result.id)
+                self.assertEqual(result.status, "failed")
+
+    def test_meta_full_name_with_trailing_newline_is_rejected(self):
+        self.leg("dispatch-1", m=meta("Owner/Repo\n"))
+        self.assertEqual(self.run_publish()["failed"], 1)
+        self.assertFalse(self.lib.exists())
+
+    def test_entry_path_with_trailing_newline_is_rejected(self):
+        write_entry(self.lib)
+        before = {p.name: p.read_bytes() for p in self.lib.iterdir()}
+        self.leg("dispatch-1", entry_path="library/owner__repo.md\n")
+        self.assertEqual(self.run_publish()["failed"], 1)
+        self.assertEqual({p.name: p.read_bytes() for p in self.lib.iterdir()}, before)
+
+    def test_missing_leg_id_with_trailing_newline_is_rejected(self):
+        result = publish.run(self.art, self.repo, now=NOW, items=[{"id": "dispatch-1\n"}])
+        self.assertEqual(result["failed"], 0)
+        self.assertEqual(result["failed_ids"], [])
+
     # --- ok / dedup / failed -------------------------------------------------
 
     def test_ok_writes_md_svg_and_moves_to_done(self):

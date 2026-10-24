@@ -25,6 +25,17 @@ def svg_with(fragment):
 
 
 class SummaryTest(unittest.TestCase):
+    def test_summary_size_checked_in_bytes_before_json_parsing(self):
+        from unittest.mock import patch
+
+        for text in (" " * (validate.MAX_SUMMARY_BYTES + 1), "字" * (validate.MAX_SUMMARY_BYTES // 3 + 1)):
+            with self.subTest(chars=len(text)), patch.object(validate.json, "loads") as loads:
+                self.assertEqual(validate.validate_summary(text, CATS), ["summary exceeds 64 KiB"])
+                loads.assert_not_called()
+        text = json.dumps(OK, ensure_ascii=False)
+        padded = " " * (validate.MAX_SUMMARY_BYTES - len(text.encode("utf-8"))) + text
+        self.assertEqual(validate.validate_summary(padded, CATS), [])
+
     def test_summary_ok(self):
         self.assertEqual(validate.validate_summary(json.dumps(OK, ensure_ascii=False), CATS), [])
 
@@ -148,6 +159,24 @@ class SvgTest(unittest.TestCase):
         self.assertEqual(validate.validate_svg(svg_with(frag)), [])
 
 class CliTest(unittest.TestCase):
+    def test_oversize_files_rejected_before_reading(self):
+        import tempfile
+        from pathlib import Path
+        from unittest.mock import patch
+
+        for kind, limit, message in (("summary", validate.MAX_SUMMARY_BYTES, "summary exceeds 64 KiB"),
+                                     ("svg", validate.SVG_MAX_BYTES, "SVG exceeds 2 MiB")):
+            with self.subTest(kind=kind), tempfile.TemporaryDirectory() as tmp:
+                path = Path(tmp) / kind
+                with path.open("wb") as stream:
+                    stream.truncate(limit + 1)
+                with (patch.object(Path, "read_text") as read_text,
+                      patch("builtins.print") as output):
+                    self.assertEqual(validate.main([kind, str(path)]), 1)
+                    read_text.assert_not_called()
+                    output.assert_called_once_with(message)
+
+
     def test_summary_cli_survives_malformed_taxonomy(self):
         import subprocess
         import sys

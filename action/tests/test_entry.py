@@ -255,7 +255,50 @@ class EntryTest(unittest.TestCase):
         self.assertEqual(side["sightings"][0]["at"], "2026-10-01")
         self.assertEqual(p.read_text(encoding="utf-8"), "md text")
 
+    def symlink_or_skip(self, link, target, *, directory=False):
+        try:
+            link.symlink_to(target, target_is_directory=directory)
+        except (OSError, NotImplementedError) as e:
+            self.skipTest(f"OS cannot create symlinks: {e}")
+
+    def test_write_rejects_symlink_siblings_before_changing_any_file(self):
+        for i, suffix in enumerate((".md", ".json", ".svg")):
+            for dangling in (False, True):
+                with self.subTest(suffix=suffix, dangling=dangling):
+                    library = self.lib / f"library-{i}-{dangling}"
+                    library.mkdir()
+                    md = library / "owner__repo.md"
+                    outside = self.lib / f"outside-{i}-{dangling}"
+                    if not dangling:
+                        outside.write_text("outside sentinel", encoding="utf-8")
+                    link = md.with_suffix(suffix)
+                    self.symlink_or_skip(link, outside)
+                    with self.assertRaises(ValueError):
+                        entry.write_entry_files(md, self.fm, "new text")
+                    self.assertEqual(list(library.iterdir()), [link])
+                    self.assertTrue(link.is_symlink())
+                    self.assertEqual(outside.read_text(encoding="utf-8") if outside.exists() else None,
+                                     None if dangling else "outside sentinel")
+
+    def test_write_rejects_symlink_library_root(self):
+        outside = self.lib / "outside"
+        outside.mkdir()
+        sentinel = outside / "sentinel"
+        sentinel.write_text("keep", encoding="utf-8")
+        library = self.lib / "library"
+        self.symlink_or_skip(library, outside, directory=True)
+        with self.assertRaises(ValueError):
+            entry.write_entry_files(library / "owner__repo.md", self.fm, "new text")
+        self.assertEqual(list(outside.iterdir()), [sentinel])
+        self.assertEqual(sentinel.read_text(encoding="utf-8"), "keep")
+
+    def test_write_target_must_resolve_inside_library(self):
+        outside = self.lib.parent / "outside.md"
+        with self.assertRaises(ValueError):
+            entry.check_write_paths(outside, self.lib)
+
     def test_md_untouched_when_sidecar_cannot_be_written(self):
+
         p = self.lib / "owner__repo.md"
         p.write_text("original", encoding="utf-8")
         (self.lib / "owner__repo.json").mkdir()
