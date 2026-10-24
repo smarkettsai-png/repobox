@@ -91,7 +91,37 @@ PAT 只存在這個瀏覽器的 localStorage。
 2. 到 `https://github.com/<你>/repobox-library/actions` 確認 `repobox` workflow 被觸發。
 3. 跑完後回網頁的「書庫」查看。失敗的項目會被搬到 `inbox/failed/`,錯誤原因寫在裡面。
 
-手機可把網頁「加到主畫面」安裝為 PWA,再從分享選單直接收藏(尚未在真機驗證)。
+手機設定與分享收藏見下一節。
+
+## 5.1 手機設定(PWA 分享捷徑)
+
+網頁是 PWA,安裝後會出現在手機的分享選單:在 GitHub App 或瀏覽器的專案頁按「分享」→ 選 RepoBox,就會自動收藏,不用複製貼上。
+
+### 設定步驟
+
+1. **建這支手機專用的 PAT。** 照 4.2 的權限再建一把(只選 `repobox-library`、Contents: Read and write、不勾 Workflows、設到期日),名稱標明裝置,例如 `repobox-phone`。每台裝置各用一把,遺失時只撤銷該把。
+2. 把 PAT 傳到手機時,使用密碼管理器或自己的加密備忘錄,不要透過聊天軟體或雲端公開文件。
+3. 用手機瀏覽器開 `https://<你>.github.io/repobox/`。
+4. 按頂部「尚未設定」標籤,填 `<你>/repobox-library` 與手機專用 PAT,按「儲存」。
+5. **安裝成 App**(沒安裝就不會出現在分享選單):
+   - Android Chrome:選單 →「安裝應用程式」或「加到主畫面」。
+   - iPhone Safari:分享 →「加入主畫面」。
+6. 到 GitHub App 或瀏覽器開一個專案頁,按分享,選 **RepoBox**。RepoBox 會開啟,顯示收到的專案並收藏。
+
+### 運作方式
+
+- `manifest.webmanifest` 宣告 `share_target`,接收分享的標題、文字、網址。
+- 分享內容以 POST 送到網頁的 `/share`,由 service worker 暫存後導回首頁。
+- 首頁從分享的文字中找出 GitHub 專案網址(會拆開常見的跳轉包裝連結),再用該裝置的 PAT 寫入 `inbox/`。
+- 首頁底部「最後一次收到的分享內容」可展開,用來除錯。
+
+### 限制與未驗證
+
+- 每台裝置的 localStorage 各自獨立,每台都要設定一次。
+- Android Chrome 支援分享目標。**iPhone Safari 是否支援尚未確認**;不行時改用首頁輸入框複製貼上。
+- 以上只確認過程式與設定檔的寫法,**尚未在真機測試**。
+- 分享選單沒出現 RepoBox 時:確認已安裝成 App(不是只開網頁),並重新開啟 App 一次。
+- 收到分享但沒有收藏:展開「最後一次收到的分享內容」,看是否找得到 GitHub 專案網址;PAT 是否過期。
 
 ## 6. 分析模型
 
@@ -137,4 +167,5 @@ pi 只負責把收藏寫進 `inbox/`、查詢狀態與讀回結果,不參與分�
 | 收藏後沒有 workflow 執行 | PAT 是否有 Contents: Read and write、是否選對 repo;library 的 Actions 是否啟用 |
 | workflow 找不到 `analyze.yml` | `uses:` 的 SHA 是否完整且存在於 fork;fork 是公開的 |
 | 條目進 `inbox/failed/` | 該檔內的錯誤原因;Secret 是否設定;模型是否過載 |
+| 手機分享選單沒有 RepoBox | 是否已安裝成 App;見 5.1 |
 | 網頁顯示尚未設定 | 是否在同一個瀏覽器、同一個 origin 設定;是否被清除網站資料 |
