@@ -10,7 +10,7 @@
 - Framework: none；GitHub Actions reusable workflow + GitHub Pages
 - Datastore: 使用者自己的私人 GitHub repo（`library/*.md|json|svg`、`index.json`）
 - Build/run: 無 build；`web/` 直接部署到 Pages，`analyze.yml` 由收藏 repo 以 SHA 呼叫
-- Test: `python3 -m unittest discover -s action/tests && node --test 'web/tests/*.test.mjs'`；
+- Test: `python3 -m unittest discover -s action/tests && node --test 'web/tests/*.test.mjs' integrations/pi/repobox/repobox.test.mjs`；
   e2e：`PW_CORE=<playwright-core 路徑> [PW_CHROME=<chrome 路徑>] node web/tests/e2e/gate.cjs`（另有 capture.cjs、read.cjs）
 
 ## File layout

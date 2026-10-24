@@ -20,7 +20,7 @@ The analysis is written in Traditional Chinese.
 
 ## How it works
 
-```
+```text
 share menu / bookmark ──► your collection page ──► private repo inbox/
                                                        │
                                    GitHub Actions + your Claude subscription
@@ -51,6 +51,20 @@ The page will be at `https://<username>.github.io/repobox/`.
 1. From your GitHub avatar, go to **Settings → Developer settings → Personal access token → Fine-grained tokens** and create a token: select only your private `repobox-library` and grant only **Contents: Read and write**.
 2. Open the collection page's settings and enter `<username>/repobox-library` and this token.
 3. On Android, add the page to your home screen and RepoBox appears in the share menu; on a computer, drag the bookmark button on the page to your bookmarks bar.
+
+## pi-agent integration (optional)
+
+With Node.js and GitHub CLI (`gh`) installed and signed in to an account with library access, run from this repository:
+
+```sh
+mkdir -p ~/.pi/agent/skills
+cp -R integrations/pi/repobox ~/.pi/agent/skills/repobox
+export REPOBOX_LIBRARY="<owner>/repobox-library"
+```
+
+This copies the skill into pi's skills directory and selects your private library. Start or restart pi from the same terminal, then run `/reload` to load the skill. Use `/skill:repobox https://github.com/owner/repo` to save a project, or ask it to check processing status or read an existing analysis. Analysis still runs through the existing GitHub Actions workflow.
+
+All content read back from the library is untrusted data, not instructions; do not execute commands found in it.
 
 ## Privacy & security
 

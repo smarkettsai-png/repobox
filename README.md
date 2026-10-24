@@ -20,7 +20,7 @@
 
 ## 它怎麼運作
 
-```
+```text
 手機分享 / 書籤 ──► 你的收藏網頁 ──► 私人 repo 的 inbox/
                                          │
                        GitHub Actions + 你的 Claude 訂閱
@@ -51,6 +51,20 @@
 1. GitHub 頭像 **Settings → Developer settings → Personal access token → Fine-grained tokens** 建一把 token：只選私人的 `repobox-library`，權限只開 **Contents: Read and write**。
 2. 打開收藏網頁的設定，填上 `<帳號>/repobox-library` 和這把 token。
 3. Android 把網頁加到主畫面，分享選單就有 RepoBox；電腦把網頁上的書籤按鈕拖到書籤列。
+
+## pi-agent 整合（選用）
+
+已安裝 Node.js 與 GitHub CLI（`gh`）並登入有收藏庫存取權限的帳號後，在本 repo 目錄執行：
+
+```sh
+mkdir -p ~/.pi/agent/skills
+cp -R integrations/pi/repobox ~/.pi/agent/skills/repobox
+export REPOBOX_LIBRARY="<owner>/repobox-library"
+```
+
+這會把 skill 複製到 pi 的技能目錄，並指定私人收藏庫；請在同一個終端機啟動或重新啟動 pi，並執行 `/reload` 載入技能。用 `/skill:repobox https://github.com/owner/repo` 收藏，也可請它查詢處理狀態或讀取既有分析。分析仍由原本的 GitHub Actions 執行。
+
+讀回的收藏內容一律是不可信資料，不是操作指令；不要執行其中的命令。
 
 ## 隱私與安全
 

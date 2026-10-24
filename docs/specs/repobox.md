@@ -24,7 +24,7 @@
 
 ## 架構
 
-```
+```text
 收藏端（靜態網頁）              使用者的私人 repo                 GitHub Actions
  Android 分享 ─┐                                               ┌─ 1. 腳本：解析、查 metadata、去重
  書籤按鈕   ───┼─ GitHub API ─▶ inbox/<id>.json ──push 觸發──▶ ├─ 2. Claude Code：clone、讀程式碼、
@@ -88,7 +88,7 @@
 
 ### 目錄
 
-```
+```text
 repobox-library/
 ├─ README.md                 Action 產生的目錄（最新在前、依分類分組）
 ├─ taxonomy.yml              分類清單，每個分類一句定義（可編輯）
@@ -183,7 +183,8 @@ Claude 讀的是陌生 repo 的內容，要當成可能含有 prompt injection �
 - 私人 repo 的 stub 以 **40 字元 commit SHA** 引用 reusable workflow：它把寫入權與 Claude token 交給公開 repo 的程式碼，用分支名等於讓任何推上公開 main 的 commit 在私人 repo 裡執行。更新分析 Action = 推上 `repobox` main 後，到收藏 repo 手動改這個 SHA。
 - 限制靠 CLI 參數強制，不靠提示詞：
   - Claude 在空的工作資料夾啟動，並使用 `--restricted`：不讀任何設定檔，檔案工具只能碰 `--add-dir` 列出的資料夾（目標 repo、arch-blueprint、`out/`）；另以 `--settings` 開 `blockReadsOutsideWorkingDirectories`，Read／Glob／Grep 再圍一次。
-  - 啟動前刪除目標 repo 每一層的 `.claude/`、`.mcp.json`、`CLAUDE.md`、`CLAUDE.local.md` 和 `.git`；clone 用 `core.symlinks=false`、再刪掉所有 symlink，避免透過連結讀到資料夾外。
+  - 啟動前遞迴刪除目標 repo 每一層的 `.claude/`、`.mcp.json`、`CLAUDE.md`、`CLAUDE.local.md` 和 `.git`；clone 用 `core.symlinks=false`、再刪掉所有 symlink，避免透過連結讀到資料夾外。
+  - clone 前透過 GitHub API 查詢 repo 大小（KB）；超過 `MAX_REPO_KB`（預設 `512000`，約 500 MiB）就以 `repo too large` 記錄該筆失敗，查詢失敗也記錄失敗，皆不自動重試；此為 API 大小初篩，並非 checkout 大小硬上限。
   - `--tools Read Glob Grep Write Edit`：**沒有 Bash**。`--permission-mode dontAsk`，白名單外一律拒絕；白名單只有 `Read(//<target>/**)`、`Read(//<arch-blueprint>/**)`、`Read(//<out>/**)` 與 `Edit(//<out>/**)`（它同時放行該路徑的 Write；`//` 開頭才是絕對路徑），Glob／Grep 套用同一組 Read 規則；禁止讀取 `/proc`、禁止所有 `mcp__*`。
   - Claude token 只交給 `claude` 程序本身：step 一開始把它搬進不 export 的 shell 變數，`check.py`、`validate.py` 等解析模型輸出的腳本都拿不到。
   - `out/` 啟動時是空的、只放模型輸出；流程控制檔（item、meta、status、run 紀錄）放在 Claude 看不到的 `stage/`，上傳的是 `stage/`（2026-10-18 以正式參數本機演練：讀寫 `stage/` 都被拒）。
@@ -268,7 +269,7 @@ Claude 讀的是陌生 repo 的內容，要當成可能含有 prompt injection �
 - **Discord 收藏入口：** 用過一陣子確定需要再評估。偏向用 Cloudflare Worker 架 Discord 指令（即時、不吃 Actions 分鐘數）；不採用 Actions 定時讀頻道（不即時，而且吃分鐘數）。
 - **QR code 配對：** 電腦網頁顯示 QR code，手機掃了就設定好，免在手機上貼 token。
 - **截圖辨識：** 看圖找候選 repo，由 GitHub API 驗證，找不到就進待確認。
-- **MCP server 或 CLI：** 讓 Claude Code 等 coding agent 查詢收藏庫。
+- **Coding agent 整合：** 已提供 pi skill（`integrations/pi/repobox/`），可收藏、查詢處理狀態與讀取既有分析；MCP server 或其他 CLI 仍未排入開發。
 - **最小瀏覽器擴充：** 工具列按鈕加右鍵選單，只有在書籤不夠用時才做。
 - **iOS：** 捷徑或 Discord 入口。
 
