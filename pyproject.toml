@@ -1,0 +1,8 @@
+# Static-analysis config only; RepoBox has no Python packaging.
+[tool.pyright]
+include = ["action"]
+# action/tests/_path.py adds action/scripts to sys.path at runtime; static tools cannot see that.
+extraPaths = ["action/scripts"]
+pythonVersion = "3.12"
+venvPath = "."
+venv = ".venv"

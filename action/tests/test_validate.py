@@ -104,6 +104,21 @@ class SvgTest(unittest.TestCase):
         self.assertTrue(validate.validate_svg(doctype))
         self.assertTrue(validate.validate_svg("<svg"))
 
+    def test_svg_attribute_allowlist_exact_errors(self):
+        # Pins validate_svg's attribute allow-list (event/style/unknown rejected, known and xmlns accepted)
+        rect = '<rect x="0" y="0" width="1" height="1" %s/>'
+        cases = {
+            "onload": ('onload="alert(1)"', ["rect@onload: attribute not allowed"]),
+            "style": ('style="fill:red"', ["rect@style: attribute not allowed"]),
+            "unknown": ('mystery="1"', ["rect@mystery: attribute not allowed"]),
+            "allowed": ('opacity="0.5"', []),
+        }
+        for name, (attr, expected) in cases.items():
+            with self.subTest(name=name):
+                self.assertEqual(validate.validate_svg(svg_with(rect % attr)), expected)
+        xmlns = '<g xmlns:foo="http://example.com/ns"><rect x="0" y="0" width="1" height="1"/></g>'
+        self.assertEqual(validate.validate_svg(svg_with(xmlns)), [])
+
     def test_svg_rejects_oversize(self):
         self.assertTrue(validate.validate_svg(svg_with("<!--" + "x" * (2 * 1024 * 1024) + "-->")))
 
