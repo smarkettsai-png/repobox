@@ -48,6 +48,40 @@ function specTable(lines) {
 
 function tabs(rec) {
   const views = {};
+  const bullets = (items) => { const ul = el('ul'); items.forEach((s) => ul.append(el('li', null, s))); return ul; };
+  const problems = list(rec.problems), strengths = list(rec.strengths), limitations = list(rec.limitations);
+  if (problems.length) views['解決什麼'] = () => bullets(problems);
+  if (strengths.length || limitations.length) views['優勢與限制'] = () => {
+    const d = el('div');
+    if (strengths.length) d.append(el('h3', null, '優勢'), bullets(strengths));
+    if (limitations.length) d.append(el('h3', null, '限制'), bullets(limitations));
+    return d;
+  };
+  const alternatives = (Array.isArray(rec.alternatives) ? rec.alternatives : [])
+    .filter((a) => a && text(a.name) && text(a.differs) && ['readme', 'model'].includes(a.source));
+  if (alternatives.length) views['同類比較'] = () => {
+    const ul = el('ul');
+    alternatives.forEach((a) => {
+      const li = el('li');
+      li.append(el('b', null, a.name), el('p', null, a.differs),
+        el('small', 'source', a.source === 'readme' ? 'README 提及' : '依模型知識，未驗證'));
+      ul.append(li);
+    });
+    return ul;
+  };
+  const verdicts = { high: '高', medium: '中', low: '低', none: '不適用' };
+  const fit = rec.fit;
+  if (fit && typeof fit.verdict === 'string' && Object.hasOwn(verdicts, fit.verdict)) {
+    const tool = text(fit.tool);
+    const label = /^[A-Za-z0-9\u4e00-\u9fff][A-Za-z0-9\u4e00-\u9fff .+#/-]{0,29}(?![\s\S])/u.test(tool) ? tool + ' 適用性' : '工具適用性';
+    views[label] = () => {
+      const d = el('div');
+      d.append(el('span', 'fit-badge', verdicts[fit.verdict]));
+      if (list(fit.reasons).length) d.append(el('h3', null, '理由'), bullets(list(fit.reasons)));
+      if (list(fit.how).length) d.append(el('h3', null, '整合方式'), bullets(list(fit.how)));
+      return d;
+    };
+  }
   const highlights = list(rec.highlights), stack = list(rec.stack), summary = text(rec.summary);
   if (highlights.length) views['值得借鏡'] = () => { const ul = el('ul'); highlights.forEach((h) => ul.append(el('li', null, h))); return ul; };
   if (summary) views['技術摘要'] = () => el('p', null, summary);
@@ -96,6 +130,7 @@ function renderText(rec, legacy) {
   const t = legacy ? null : tabs(rec);
   if (t) parts.push(t);
   if (legacy || (!intro && !t)) parts.push(el('p', 'note', '這筆是舊格式，重新分析後會有完整內容。'));
+  if (intro && !list(rec.problems).length) parts.push(el('p', 'note', '這筆是舊版報告，重新分析後會有問題、比較與適用性。'));
   $('col').replaceChildren(...parts);
 }
 

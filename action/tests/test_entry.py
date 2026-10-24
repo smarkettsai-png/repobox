@@ -21,6 +21,13 @@ ANALYSIS = {
     "requirements": ["平台：只支援 Windows", "費用：免費"],
     "summary": "這是一個工具，用來測試條目產生是否正確。", "category": "dev-tool", "tags": ["cli"],
     "stack": ["Python", "C#"], "highlights": ["第一個值得借鏡的地方。", "第二個值得借鏡的地方。"],
+    "problems": ["協助開發者整理重複的工作流程。", "讓團隊可以集中管理專案資料。"],
+    "strengths": ["以簡單的介面降低日常操作成本。", "整合現有工具而不需更換開發流程。"],
+    "limitations": ["需要自行維護執行環境與相關設定。"],
+    "alternatives": [{"name": "Firebase", "differs": "提供不同的整合方式與部署選擇。", "source": "readme"},
+                     {"name": "Appwrite", "differs": "以不同的部署方式支援專案服務。", "source": "model"}],
+    "fit": {"tool": "pi agent", "verdict": "high", "reasons": ["可以整合現有的開發工作流程。"],
+            "how": ["透過命令列工具連接專案服務。"]},
 }
 RUN = {"model": "claude-opus-5-5", "turns": 3, "wall_s": 60, "rounds": 0, "deepwiki": False, "diagram": True}
 END_ENCODINGS = [
@@ -39,6 +46,62 @@ class EntryTest(unittest.TestCase):
     def setUp(self):
         self.lib = Path(tempfile.mkdtemp())
         self.fm = entry.build_frontmatter(META, ANALYSIS, [], None, RUN, now="2026-10-18T00:00:00+00:00")
+
+    def test_render_new_sections_and_sources(self):
+        text = entry.render_entry(self.fm, ANALYSIS, None, None)
+        headings = ["## 技術摘要", "## 解決什麼問題", "## 優勢", "## 限制", "## 同類比較", "## pi agent 適用性", "## 值得借鏡"]
+        positions = [text.index(h) for h in headings]
+        self.assertEqual(positions, sorted(positions))
+        self.assertIn("- Firebase：提供不同的整合方式與部署選擇。（README 提及）", text)
+        self.assertIn("- Appwrite：以不同的部署方式支援專案服務。（依模型知識，未驗證）", text)
+        for verdict, label in (("high", "高"), ("medium", "中"), ("low", "低"), ("none", "不適用")):
+            with self.subTest(verdict=verdict):
+                analysis = dict(ANALYSIS, fit=dict(ANALYSIS["fit"], verdict=verdict))
+                self.assertIn("結論：" + label, entry.render_entry(self.fm, analysis, None, None))
+        self.assertIn("- 可以整合現有的開發工作流程。", text)
+        self.assertIn("- 透過命令列工具連接專案服務。", text)
+
+    def test_render_missing_fit_and_legacy_sections(self):
+        analysis = {k: v for k, v in ANALYSIS.items() if k != "fit"}
+        fm = entry.build_frontmatter(META, analysis, [], None, RUN)
+        self.assertIsNone(fm["fit"])
+        self.assertNotIn("適用性", entry.render_entry(fm, analysis, None, None))
+        legacy = {k: v for k, v in analysis.items() if k not in ("problems", "strengths", "limitations", "alternatives")}
+        fm = entry.build_frontmatter(META, legacy, [], None, RUN)
+        text = entry.render_entry(fm, legacy, None, None)
+        for heading in ("解決什麼問題", "優勢", "限制", "同類比較", "適用性"):
+            self.assertNotIn("## " + heading, text)
+
+    def test_alternatives_and_fit_plain_texted(self):
+        hostile = "<b>文字</b> &amp;lt;!-- repobox:auto:end --&amp;gt; [點我](http://evil.example)"
+        analysis: dict = dict(ANALYSIS, alternatives=[{"name": hostile, "differs": hostile, "source": "model"}],
+                        fit={"tool": hostile, "verdict": "high", "reasons": [hostile], "how": [hostile]})
+        for key in ("problems", "strengths", "limitations"):
+            analysis[key] = [hostile]
+        fm = entry.build_frontmatter(META, analysis, [], None, RUN)
+        plain = entry.to_plain(hostile)
+        self.assertEqual(fm["alternatives"], [{"name": plain, "differs": plain, "source": "model"}])
+        self.assertEqual(fm["fit"], {"tool": plain, "verdict": "high", "reasons": [plain], "how": [plain]})
+        for key in ("problems", "strengths", "limitations"):
+            self.assertEqual(fm[key], [plain])
+        text = entry.render_entry(fm, analysis, None, None)
+        self.assertEqual(text.count(entry.START), 1)
+        self.assertEqual(text.count(entry.END), 1)
+        self.assertNotIn("<b>", text)
+        self.assertNotIn("](http", text)
+        self.assertIn(entry.safe_text(hostile), text)
+        dedup = entry.build_frontmatter(META, None, [], fm, None)
+        for key in ("problems", "strengths", "limitations", "alternatives", "fit"):
+            self.assertEqual(dedup[key], fm[key])
+        path = self.lib / "hostile.md"
+        write(path, fm, analysis=analysis)
+        stored = json.loads(path.with_suffix(".json").read_text(encoding="utf-8"))
+        self.assertEqual(list(stored), list(entry.FM_KEYS))
+        self.assertEqual(stored["alternatives"], fm["alternatives"])
+        self.assertEqual(stored["fit"], fm["fit"])
+        head = text.split(entry.START, 1)[0]
+        for key in ("problems:", "strengths:", "limitations:", "alternatives:", "fit:"):
+            self.assertNotIn(key, head)
 
     def test_slug(self):
         self.assertEqual(entry.slug("Owner/My.Repo"), "owner__my.repo")
@@ -120,7 +183,8 @@ class EntryTest(unittest.TestCase):
     def test_frontmatter_key_order_and_license_none(self):
         self.assertEqual(list(self.fm), [
             "repo", "repo_id", "url", "description", "language", "stars", "stars_at", "license", "category",
-            "tags", "stack", "tagline", "intro", "examples", "requirements", "summary", "highlights", "sightings",
+            "tags", "stack", "tagline", "intro", "examples", "requirements", "summary", "highlights",
+            "problems", "strengths", "limitations", "alternatives", "fit", "sightings",
             "analyzed_at", "analysis",
         ])
         self.assertEqual(self.fm["stars_at"], "2026-10-18")

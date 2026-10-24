@@ -9,6 +9,10 @@ ANALYSIS = {
     "requirements": ["平台：只支援 Windows", "費用：免費"],
     "summary": "這是一個用來測試的專案，說明寫得夠長才會通過驗證。", "category": "dev-tool", "tags": ["cli", "test"],
     "stack": ["Python"], "highlights": ["第一個值得借鏡的地方。", "第二個值得借鏡的地方。"],
+    "problems": ["協助開發者整理重複的工作流程。", "讓團隊可以集中管理專案資料。"],
+    "strengths": ["以簡單的介面降低日常操作成本。", "整合現有工具而不需更換開發流程。"],
+    "limitations": ["需要自行維護執行環境與相關設定。"],
+    "alternatives": [],
 }
 
 

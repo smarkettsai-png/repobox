@@ -211,6 +211,9 @@ jobs:
           CHECK="$AB/skills/arch-blueprint/scripts/check.py"
           TAX=-; TAXARG=()
           if [ -f "$GITHUB_WORKSPACE/taxonomy.yml" ]; then TAX="$GITHUB_WORKSPACE/taxonomy.yml"; TAXARG=(--taxonomy "$TAX"); fi
+          python3 "$S/profile.py" resolve "$GITHUB_WORKSPACE/profile.md" "$RUNNER_TEMP/profile.json" || exit 1
+          VARGS=$(python3 "$S/profile.py" summary-args "$RUNNER_TEMP/profile.json" --target "$TARGET") || exit 1
+          mapfile -t VARGS <<< "$VARGS"
           FLAGS=(--model claude-haiku-5-5 --effort xhigh --max-budget-usd 4 --output-format stream-json --verbose
             --restricted --permission-mode dontAsk
             --tools Read Glob Grep Write Edit
@@ -222,12 +225,12 @@ jobs:
           claude_run() { CLAUDE_CODE_OAUTH_TOKEN="$TOKEN" claude "$@" "${FLAGS[@]}" < /dev/null; }
           start=$(date +%s)
           PROMPT=$(python3 "$S/prompt.py" analyze --full "$FULL" --target "$TARGET" --out "$OUT" \
-            --skill "$AB/skills/arch-blueprint/SKILL.md" --taxonomy "$TAX")
+            --skill "$AB/skills/arch-blueprint/SKILL.md" --taxonomy "$TAX" --profile "$RUNNER_TEMP/profile.json")
           claude_run -p "$PROMPT" --max-turns 80 > "$RUNNER_TEMP/stream-0.jsonl"
           rc=$?
           python3 "$S/claude_stream.py" "$RUNNER_TEMP"/stream-*.jsonl "$STAGE/run.json"
           SID=$(jq -r '.result.session_id // empty' "$STAGE/run.json")
-          if [ -n "$SID" ] && ! python3 "$S/validate.py" summary "$OUT/summary.json" "${TAXARG[@]}" > "$RUNNER_TEMP/summary-errs.txt"; then
+          if [ -n "$SID" ] && ! python3 "$S/validate.py" summary "$OUT/summary.json" "${TAXARG[@]}" "${VARGS[@]}" > "$RUNNER_TEMP/summary-errs.txt"; then
             FIXS=$(python3 "$S/prompt.py" fix-summary --out "$OUT" --errors "$RUNNER_TEMP/summary-errs.txt")
             claude_run -p "$FIXS" --resume "$SID" --max-turns 10 > "$RUNNER_TEMP/stream-0s.jsonl"
             python3 "$S/claude_stream.py" "$RUNNER_TEMP"/stream-*.jsonl "$STAGE/run.json"
@@ -262,10 +265,12 @@ jobs:
           CHECK="$AB/skills/arch-blueprint/scripts/check.py"
           common=(--entry "$ENTRY" --repo-id "$REPO_ID" --rounds "${ROUNDS:-0}" --wall-s "${WALL:-0}" --claude-exit "${CLAUDE_EXIT:-}")
           TAXARG=(); [ -f "$GITHUB_WORKSPACE/taxonomy.yml" ] && TAXARG=(--taxonomy "$GITHUB_WORKSPACE/taxonomy.yml")
+          VARGS=$(python3 "$S/profile.py" summary-args "$RUNNER_TEMP/profile.json" --target "$TARGET") || { python3 "$S/status.py" "$STAGE/status.json" --status failed --error "profile: invalid state" "${common[@]}"; exit 0; }
+          mapfile -t VARGS <<< "$VARGS"
           extra=$(find "$OUT" -mindepth 1 ! -name summary.json ! -name diagram.svg -printf '%P\n')
           if [ -n "$extra" ]; then
             python3 "$S/status.py" "$STAGE/status.json" --status failed --error "unexpected files in out: $(echo "$extra" | head -5 | tr '\n' ' ')" "${common[@]}"
-          elif ! errs=$(python3 "$S/validate.py" summary "$OUT/summary.json" "${TAXARG[@]}"); then
+          elif ! errs=$(python3 "$S/validate.py" summary "$OUT/summary.json" "${TAXARG[@]}" "${VARGS[@]}"); then
             python3 "$S/status.py" "$STAGE/status.json" --status failed --error "summary: $(echo "$errs" | head -5 | tr '\n' ' ')" "${common[@]}"
           else
             cp "$OUT/summary.json" "$STAGE/summary.json"

@@ -24,7 +24,91 @@ def svg_with(fragment):
     return SVG_OK.replace("</svg>", fragment + "</svg>")
 
 
+NEW_FIELDS = {
+    "problems": ["協助開發者整理重複的工作流程。", "讓團隊可以集中管理專案資料。"],
+    "strengths": ["以簡單的介面降低日常操作成本。", "整合現有工具而不需更換開發流程。"],
+    "limitations": ["需要自行維護執行環境與相關設定。"],
+    "alternatives": [
+        {"name": name, "differs": "提供不同的整合方式與部署選擇。", "source": source}
+        for name, source in (("Firebase", "readme"), ("Appwrite", "model"), ("PocketBase", "model"))
+    ],
+}
+FIT = {"tool": "pi agent", "verdict": "high", "reasons": ["可以整合現有的開發工作流程。"],
+       "how": ["透過命令列工具連接專案服務。"]}
+
+
+def full_summary(**changes):
+    return summary_with(**(NEW_FIELDS | changes))
+
+
 class SummaryTest(unittest.TestCase):
+    def test_summary_full_schema_ok(self):
+        self.assertEqual(validate.validate_summary(full_summary(fit=FIT), CATS,
+                         expect_tool="pi agent", readme_text="Supports FIREBASE."), [])
+        self.assertEqual(validate.validate_summary(full_summary(alternatives=[]), CATS), [])
+
+    def test_summary_new_keys_and_prose(self):
+        data = json.loads(full_summary())
+        del data["problems"]
+        self.assertIn("keys: missing ['problems']", validate.validate_summary(json.dumps(data), CATS))
+        for field in ("problems", "strengths", "limitations"):
+            for value in ([], ["English only sentence long enough."] * 2, ["中" * 121] * 2, [1, 2]):
+                with self.subTest(field=field, value=value):
+                    self.assertTrue(validate.validate_summary(full_summary(**{field: value}), CATS))
+        for field in ("differs",):
+            alt = dict(NEW_FIELDS["alternatives"][0], **{field: "English only sentence long enough."})
+            self.assertTrue(validate.validate_summary(full_summary(alternatives=[alt]), CATS))
+        for field in ("reasons", "how"):
+            self.assertTrue(validate.validate_summary(full_summary(fit=dict(FIT, **{field: ["English sentence long enough."]})), CATS))
+
+    def test_alternatives_rules_and_readme_source(self):
+        alt = NEW_FIELDS["alternatives"][0]
+        for changes in ({"name": "bad/name"}, {"name": ""}, {"name": "x" * 41},
+                        {"source": "unknown"}, {"source": []}, {"extra": 1}):
+            with self.subTest(changes=changes):
+                self.assertTrue(validate.validate_summary(full_summary(alternatives=[dict(alt, **changes)]), CATS))
+        for alternatives in ([alt] * 5, [alt, dict(alt, name="FIREBASE")], [None], None):
+            self.assertTrue(validate.validate_summary(full_summary(alternatives=alternatives), CATS))
+        errors = validate.validate_summary(full_summary(), CATS, readme_text="not mentioned")
+        self.assertIn("alternatives[0]: source readme but name not found in README", errors)
+
+    def test_fit_required_with_profile(self):
+        self.assertTrue(validate.validate_summary(full_summary(), CATS, expect_tool="pi agent"))
+        self.assertIn('fit.tool: expected "pi agent"', validate.validate_summary(
+            full_summary(fit=dict(FIT, tool="other")), CATS, expect_tool="pi agent"))
+        self.assertTrue(validate.validate_summary(full_summary(fit=FIT), CATS, expect_tool="PI agent"))
+
+    def test_fit_rejected_with_no_fit(self):
+        self.assertEqual(validate.validate_summary(full_summary(), CATS, expect_tool=None), [])
+        self.assertIn("fit: not allowed without a valid profile", validate.validate_summary(
+            full_summary(fit=FIT), CATS, expect_tool=None))
+
+    def test_fit_shape_only_when_unchecked(self):
+        self.assertEqual(validate.validate_summary(full_summary(fit=FIT), CATS), [])
+        for fit in (None, [], {}, dict(FIT, extra=1), dict(FIT, tool="bad@tool"),
+                    dict(FIT, verdict=[]), dict(FIT, reasons=[])):
+            with self.subTest(fit=fit):
+                self.assertTrue(validate.validate_summary(full_summary(fit=fit), CATS))
+
+    def test_fit_how_empty_only_for_none(self):
+        self.assertEqual(validate.validate_summary(full_summary(fit=dict(FIT, verdict="none", how=[])), CATS), [])
+        self.assertTrue(validate.validate_summary(full_summary(fit=dict(FIT, how=[])), CATS))
+        self.assertTrue(validate.validate_summary(full_summary(fit=dict(FIT, verdict="none")), CATS))
+
+    def test_new_fields_reject_urls_and_controls(self):
+        for payload in ("https://evil.example", "HTTPS://evil.example", "https&#58;//evil.example",
+                        "https&amp;#58;//evil.example", "JavaScript:alert(1)", "www.evil.example",
+                        "data:text/plain,x", "vbscript:evil", "<b>文字</b>", "字\x00元", "字\n元", "字\x7f元"):
+            prose = "這是用來測試不安全資料的文字 " + payload
+            variants = [{field: [prose, prose]} for field in ("problems", "strengths", "limitations")]
+            variants += [{"alternatives": [dict(NEW_FIELDS["alternatives"][0], **{field: prose})]}
+                         for field in ("name", "differs", "source")]
+            variants += [{"fit": dict(FIT, **{field: [prose] if field in ("reasons", "how") else prose})}
+                         for field in ("tool", "verdict", "reasons", "how")]
+            for changes in variants:
+                with self.subTest(payload=payload, changes=changes):
+                    self.assertTrue(validate.validate_summary(full_summary(**changes), CATS))
+
     def test_summary_size_checked_in_bytes_before_json_parsing(self):
         from unittest.mock import patch
 
@@ -159,6 +243,60 @@ class SvgTest(unittest.TestCase):
         self.assertEqual(validate.validate_svg(svg_with(frag)), [])
 
 class CliTest(unittest.TestCase):
+    def test_cli_expect_tool_and_target(self):
+        import contextlib
+        import io
+        import tempfile
+        from pathlib import Path
+
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp)
+            summary = target / "summary.json"
+            summary.write_text(full_summary(fit=FIT), encoding="utf-8")
+            args = ["summary", str(summary), "--target", str(target), "--expect-tool", "pi agent"]
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(validate.main(args), 1)
+                (target / "README.md").write_text("Firebase", encoding="utf-8")
+                self.assertEqual(validate.main(args), 0)
+                self.assertEqual(validate.main(args[:-1] + ["other"]), 1)
+                self.assertEqual(validate.main(args[:-2] + ["--no-fit"]), 1)
+                summary.write_text(full_summary(), encoding="utf-8")
+                self.assertEqual(validate.main(args[:-2] + ["--no-fit"]), 0)
+            with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as caught:
+                validate.main(args + ["--no-fit"])
+            self.assertEqual(caught.exception.code, 2)
+
+    def test_target_readme_candidate_order_and_limits(self):
+        import contextlib
+        import io
+        import tempfile
+        from pathlib import Path
+
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp)
+            summary = target / "summary.json"
+            summary.write_text(full_summary(), encoding="utf-8")
+            first, second = target / "README.md", target / "README.rst"
+            first.write_text("not mentioned", encoding="utf-8")
+            second.write_bytes(b"Firebase\xff")
+            args = ["summary", str(summary), "--target", str(target)]
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(validate.main(args), 1)
+                first.write_bytes(b"x" * (512 * 1024 + 1))
+                self.assertEqual(validate.main(args), 0)
+                first.unlink()
+                first.mkdir()
+                self.assertEqual(validate.main(args), 0)
+                first.rmdir()
+                try:
+                    first.symlink_to(second)
+                except OSError:
+                    pass
+                else:
+                    self.assertEqual(validate.main(args), 0)
+                    second.write_text("not mentioned", encoding="utf-8")
+                    self.assertEqual(validate.main(args), 1)
+
     def test_oversize_files_rejected_before_reading(self):
         import tempfile
         from pathlib import Path

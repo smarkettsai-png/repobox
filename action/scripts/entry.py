@@ -24,7 +24,8 @@ _MD_SPECIAL = re.compile(r"([\\`*_\[\]()#!|~])")
 # GFM autolinks bare URLs and emails even without link syntax; these go into code spans.
 _AUTOLINK = re.compile(r"(?:https?://|www\.)\S+|[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", re.IGNORECASE)
 # Full record: written to the hidden sidecar library/<stem>.json.
-READING_KEYS = ("tagline", "intro", "examples", "requirements", "summary", "highlights")
+READING_KEYS = ("tagline", "intro", "examples", "requirements", "summary", "highlights",
+                "problems", "strengths", "limitations", "alternatives", "fit")
 FM_KEYS = ("repo", "repo_id", "url", "description", "language", "stars", "stars_at", "license", "category",
            "tags", "stack", *READING_KEYS, "sightings", "analyzed_at", "analysis")
 # Visible table: GitHub renders every frontmatter key, so only human-facing fields go here.
@@ -196,8 +197,18 @@ def build_frontmatter(meta: dict, analysis: dict | None, sightings: list[dict], 
             "analysis": dict(run) if run is not None else None,
         }
         for k in READING_KEYS:
-            v = analysis[k]
-            carried[k] = [to_plain(x) for x in v] if isinstance(v, list) else to_plain(v)
+            v = analysis.get(k)
+            if v is None:
+                carried[k] = None
+            elif k == "alternatives":
+                carried[k] = [{"name": to_plain(a["name"]), "differs": to_plain(a["differs"]),
+                               "source": a["source"]} for a in v]
+            elif k == "fit":
+                carried[k] = {"tool": to_plain(v["tool"]), "verdict": v["verdict"],
+                              "reasons": [to_plain(x) for x in v["reasons"]],
+                              "how": [to_plain(x) for x in v["how"]]}
+            else:
+                carried[k] = [to_plain(x) for x in v] if isinstance(v, list) else to_plain(v)
     fm.update(carried)
     fm["sightings"] = list(sightings)
     return {k: fm[k] for k in FM_KEYS}
@@ -210,9 +221,25 @@ def _auto_block(analysis: dict, svg_name: str | None) -> str:
         + "".join(f"- **例如**：{safe_text(e)}\n" for e in analysis["examples"]),
         "\n## 使用門檻\n\n" + "".join(f"- {safe_text(r)}\n" for r in analysis["requirements"]),
         "\n## 技術摘要\n\n" + safe_text(analysis["summary"]) + "\n",
+    ]
+    for key, heading in (("problems", "解決什麼問題"), ("strengths", "優勢"), ("limitations", "限制")):
+        if values := analysis.get(key):
+            parts.append(f"\n## {heading}\n\n" + "".join(f"- {safe_text(v)}\n" for v in values))
+    if alternatives := analysis.get("alternatives"):
+        lines = []
+        for alt in alternatives:
+            source = "README 提及" if alt["source"] == "readme" else "依模型知識，未驗證"
+            lines.append(f"- {safe_text(alt['name'])}：{safe_text(alt['differs'])}（{safe_text(source)}）\n")
+        parts.append("\n## 同類比較\n\n" + "".join(lines))
+    if fit := analysis.get("fit"):
+        verdict = {"high": "高", "medium": "中", "low": "低", "none": "不適用"}.get(fit["verdict"], fit["verdict"])
+        parts.append(f"\n## {safe_text(fit['tool'])} 適用性\n\n結論：{safe_text(verdict)}\n\n"
+                     + "".join(f"- {safe_text(v)}\n" for v in fit["reasons"])
+                     + "\n" + "".join(f"- {safe_text(v)}\n" for v in fit["how"]))
+    parts.extend([
         "\n## 值得借鏡\n\n" + "".join(f"- {safe_text(h)}\n" for h in analysis["highlights"]),
         "\n## 技術棧\n\n" + " · ".join(safe_text(s) for s in analysis["stack"]) + "\n",
-    ]
+    ])
     if svg_name:
         parts.append(f"\n## 架構圖\n\n![architecture]({svg_name})\n")
     return "".join(parts)

@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <!-- frame-ancestors 無法透過 meta 設定；需由部署端的 HTTP 標頭提供。 -->
   <!-- 內嵌 CSS 以雜湊授權；修改樣式時須同步更新，JavaScript 僅允許同源檔案。 -->
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; connect-src https://api.github.com; object-src 'none'; base-uri 'none'; form-action 'self'; img-src 'self'; style-src 'self' 'sha256-//5xdlF1qfBFIt8NFYWU588MPQj+oyG0td97qjMvCP8='; style-src-attr 'none'; manifest-src 'self'; worker-src 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; connect-src https://api.github.com; object-src 'none'; base-uri 'none'; form-action 'self'; img-src 'self'; style-src 'self' 'sha256-SoNFHD8xq/IX0bVXO/KgkRdnl4doc/Om5VSsw/ZgOeU='; style-src-attr 'none'; manifest-src 'self'; worker-src 'none'">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="referrer" content="no-referrer">
   <title>RepoBox</title>
@@ -91,11 +91,16 @@
     .spec tr + tr > * { border-top: 1.5px solid var(--rule); }
     .note { margin: 0; padding: 10px 12px; border: 1.5px dashed var(--rule); color: var(--mute); font-size: 14px; }
     .more { display: flex; flex-direction: column; min-height: 0; flex: 1; border: 2px solid var(--ink); background: var(--sheet); }
-    .seg { display: flex; border-bottom: 1.5px solid var(--ink); }
-    .seg button { flex: 1; border: 0; background: none; padding: 5px 8px; font-size: 13.5px; cursor: pointer; color: var(--mute); }
+    .seg { display: flex; flex-wrap: wrap; border-bottom: 1.5px solid var(--ink); }
+    .seg button { flex: 1 0 auto; border: 0; background: none; padding: 5px 8px; font-size: 13.5px; cursor: pointer; color: var(--mute); }
     .seg button + button { border-left: 1.5px solid var(--ink); }
     .seg button[aria-selected="true"] { background: var(--ink); color: var(--on-ink); font-weight: 600; }
     .panel { padding: 10px 14px; font-size: 14px; line-height: 1.7; overflow: auto; min-height: 0; flex: 1; }
+    .panel { overflow-wrap: anywhere; }
+    .panel h3 { margin: 8px 0 4px; font-size: 14px; }
+    .panel p { margin: 4px 0; }
+    .fit-badge { display: inline-block; border: 1.5px solid var(--ink); padding: 1px 8px; font-weight: 600; }
+    .source { color: var(--mute); }
     .panel.has-more { -webkit-mask-image: linear-gradient(#000 75%, transparent); mask-image: linear-gradient(#000 75%, transparent); }
     .panel ul { margin: 0; padding-left: 1.15em; display: grid; gap: 4px; }
     .stack { display: flex; flex-wrap: wrap; gap: 6px; }

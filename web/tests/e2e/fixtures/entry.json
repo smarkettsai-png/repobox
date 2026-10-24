@@ -58,5 +58,38 @@
     "跨對話摘要以 UUID 交接，保存壓縮摘要加最近約 8k token 內容，取用後自動刪除。",
     "API 金鑰與 OAuth 憑證存在作業系統憑證庫（Keychain／Credential Manager），不寫進設定檔。"
   ],
-  "tagline": "用 ChatGPT 直接操作你的電腦"
+  "tagline": "用 ChatGPT 直接操作你的電腦",
+  "problems": [
+    "讓使用者在聊天視窗內操作本機工具，不必切換多個應用程式。",
+    "協助需要串接外部服務的人整合多種工具並集中管理工作。"
+  ],
+  "strengths": [
+    "以單一連線提供多種工具，降低使用者來回切換服務的成本。",
+    "工具按需載入，避免無關的功能佔滿對話內容。"
+  ],
+  "limitations": [
+    "需要自行管理本機權限與服務設定，不適合完全不想維護環境的人。"
+  ],
+  "alternatives": [
+    {
+      "name": "Claude Desktop",
+      "differs": "同樣支援工具串接，但此專案著重於聊天視窗中的本機操作。",
+      "source": "readme"
+    },
+    {
+      "name": "Open WebUI",
+      "differs": "提供可自行部署的聊天介面，此專案則連接既有聊天環境。",
+      "source": "model"
+    }
+  ],
+  "fit": {
+    "tool": "pi agent",
+    "verdict": "high",
+    "reasons": [
+      "能透過現有工具協定連接本機功能，適合需要操作電腦的工作。"
+    ],
+    "how": [
+      "作為外部工具服務提供給代理呼叫，沿用既有權限與認證設定。"
+    ]
+  }
 }

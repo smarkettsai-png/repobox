@@ -85,6 +85,14 @@ GitHub → Settings → Developer settings → Personal access tokens → Fine-g
 
 PAT 只存在這個瀏覽器的 localStorage。
 
+## 4.4 選用：個人工具適用性
+
+在私人收藏庫根目錄新增 `profile.md`，不要放在 fork 或目標專案，也不修改公開範本。UTF-8 純文字的第一個非空行必須為 `# pi agent` 這類標題；工具名 1–30 字，首字為英文、數字或中文，其餘允許空格與 `. + # / -`。後續可描述 CLI、MCP、SKILL.md、extensions 能力與偏好；超過 4000 字截斷並警告。
+
+缺檔、不可讀、非 UTF-8 或標題不合法時省略 fit 並繼續；有效時產生工具適用性、理由與整合方式。profile.py 只解析一次，兩次驗證皆核對同一可信工具名與目標 README，不開放額外網路或工具權限。先把 library 的 workflow SHA 換成支援此功能的 40 字元 commit。
+
+新報告另含解決問題、優勢、限制與同類比較；來源標成 README 提及／依模型知識，未驗證，不產生連結。舊條目到收藏庫 Actions 手動執行 workflow_dispatch、填專案 URL 即重跑；不做自動遷移。七個閱讀分頁可換行，缺欄位的分頁不出現。
+
 ## 5. 第一次使用
 
 1. 在首頁輸入框(「貼上 GitHub 連結」)貼一個你熟悉的中小型專案網址,按「收藏」。

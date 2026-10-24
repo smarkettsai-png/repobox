@@ -176,6 +176,80 @@ const SHOTS = process.env.SHOTS || '';
     await done('(n) phone', o, 'read-phone-rm');
   }
 
+  {
+    const labels = ['解決什麼', '優勢與限制', '同類比較', 'pi agent 適用性', '值得借鏡', '技術摘要', '技術棧'];
+    o = await open();
+    const actual = await o.page.locator('.seg button').allTextContents();
+    expect('(g) all seven tabs follow report order', JSON.stringify(actual) === JSON.stringify(labels), JSON.stringify(actual));
+    expect('(g) first available tab is selected', await o.page.locator('.seg button[aria-selected="true"]').textContent() === labels[0], actual.join(','));
+    for (const [label, texts] of [
+      ['解決什麼', JSON.parse(ENTRY).problems],
+      ['優勢與限制', [...JSON.parse(ENTRY).strengths, '限制', ...JSON.parse(ENTRY).limitations]],
+      ['同類比較', ['Claude Desktop', 'Open WebUI', 'README 提及', '依模型知識，未驗證', ...JSON.parse(ENTRY).alternatives.map((a) => a.differs)]],
+      ['pi agent 適用性', ['高', ...JSON.parse(ENTRY).fit.reasons, ...JSON.parse(ENTRY).fit.how]],
+    ]) {
+      const tab = o.page.getByRole('tab', { name: label, exact: true });
+      if (await tab.count()) await tab.click();
+      const body = await o.page.locator('.panel').textContent();
+      expect('(g/h) ' + label + ' content is complete', texts.every((t) => body.includes(t)), body);
+    }
+    const desktop = await metrics(o.page);
+    const box = await o.page.locator('.more').boundingBox();
+    expect('(k) seven-tab box fits desktop single screen', desktop.sh === desktop.h && desktop.colOver <= 0 && box.height >= 200 && box.y + box.height <= desktop.h, JSON.stringify({ desktop, box }));
+    await o.page.setViewportSize({ width: 390, height: 844 });
+    const wrap = await o.page.evaluate(() => ({
+      rows: new Set([...document.querySelectorAll('.seg button')].map((b) => b.offsetTop)).size,
+      sw: document.documentElement.scrollWidth, w: innerWidth,
+      fits: [...document.querySelectorAll('.seg button')].every((b) => b.scrollWidth <= b.clientWidth + 1),
+    }));
+    expect('(k) tabs wrap on phone without horizontal clipping', wrap.rows > 1 && wrap.sw === wrap.w && wrap.fits, JSON.stringify(wrap));
+    await done('(g/h/k)', o);
+
+    for (const [verdict, label] of [['high', '高'], ['medium', '中'], ['low', '低'], ['none', '不適用']]) {
+      const rec = JSON.parse(ENTRY); rec.fit.verdict = verdict;
+      if (verdict === 'none') rec.fit.how = [];
+      o = await open({ routes: { [`/contents/library/${STEM}.json`]: { status: 200, body: JSON.stringify(rec) } } });
+      const tab = o.page.getByRole('tab', { name: 'pi agent 適用性', exact: true });
+      if (await tab.count()) await tab.click();
+      expect('(h) fit badge ' + verdict, (await o.page.locator('.fit-badge').allTextContents()).join('') === label, label);
+      await done('(h) ' + verdict, o);
+    }
+
+    const legacy = JSON.parse(ENTRY);
+    for (const key of ['problems', 'strengths', 'limitations', 'alternatives', 'fit']) delete legacy[key];
+    o = await open({ routes: { [`/contents/library/${STEM}.json`]: { status: 200, body: JSON.stringify(legacy) } } });
+    const legacyTabs = await o.page.locator('.seg button').allTextContents();
+    expect('(i) legacy entry has only original tabs', JSON.stringify(legacyTabs) === JSON.stringify(labels.slice(4)), JSON.stringify(legacyTabs));
+    expect('(i) legacy report hint', (await o.page.textContent('.col')).includes('這筆是舊版報告，重新分析後會有問題、比較與適用性。'), 'missing');
+    await done('(i) legacy report', o);
+
+    const hostile = '<img src=x onerror="window.__reportPwned=1"> javascript:alert(1)';
+    const rec = JSON.parse(ENTRY);
+    rec.problems = [hostile]; rec.strengths = [hostile]; rec.limitations = [hostile];
+    rec.alternatives = [{ name: hostile, differs: hostile, source: 'model' }];
+    rec.fit = { tool: hostile, verdict: 'high', reasons: [hostile], how: [hostile] };
+    o = await open({ routes: { [`/contents/library/${STEM}.json`]: { status: 200, body: JSON.stringify(rec) } } });
+    expect('(j) invalid tool uses generic label', await o.page.getByRole('tab', { name: '工具適用性', exact: true }).count() === 1, 'missing');
+    for (const label of [...labels.slice(0, 3), '工具適用性']) {
+      const tab = o.page.getByRole('tab', { name: label, exact: true });
+      if (await tab.count()) await tab.click();
+      const safe = await o.page.evaluate(() => ({
+        text: document.querySelector('.panel').textContent,
+        elements: document.querySelectorAll('.more img, .more a, .more [onerror], .more [href], .more [src]').length,
+        pwned: !!window.__reportPwned,
+      }));
+      expect('(j) ' + label + ' keeps hostile strings as plain text', safe.text.includes(hostile) && safe.elements === 0 && !safe.pwned, JSON.stringify(safe));
+    }
+    await done('(j) injection', o);
+
+    for (const verdict of ['constructor', '__proto__', ['high'], null]) {
+      rec.fit.verdict = verdict;
+      o = await open({ routes: { [`/contents/library/${STEM}.json`]: { status: 200, body: JSON.stringify(rec) } } });
+      expect('(h) unknown verdict hides fit tab: ' + JSON.stringify(verdict), !(await o.page.locator('.seg button').allTextContents()).some((s) => s.includes('適用性')), 'unexpected fit tab');
+      await done('(h) invalid verdict', o);
+    }
+  }
+
   o = await open({ scheme: 'dark' });
   await done('(i) dark', o, 'read-dark');
 

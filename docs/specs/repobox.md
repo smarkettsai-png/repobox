@@ -92,6 +92,7 @@
 repobox-library/
 ├─ README.md                 Action 產生的目錄（最新在前、依分類分組）
 ├─ taxonomy.yml              分類清單，每個分類一句定義（可編輯）
+├─ profile.md                選用：可信工具能力與個人偏好（只放收藏庫）
 ├─ inbox/
 │   ├─ <id>.json             待處理
 │   ├─ done/<id>.json        已處理
@@ -137,6 +138,11 @@ stack: [TypeScript, Node.js]
 ## 這是什麼          白話介紹（給人看，不用專有名詞）＋ 1–2 個「例如」使用情境
 ## 使用門檻          1–4 行：平台／需要準備／費用／限制；不用安裝的寫「不需安裝」。限制最多一行、只寫具體的（實驗中或停更、不可商用、硬體門檻、README 自承的缺點），沒有就不寫（2026-10-23）。不寫安裝步驟（會過期，裝的時候讓 AI 讀最新 README）
 ## 技術摘要          給開發者看的架構說明
+## 解決什麼問題
+## 優勢
+## 限制
+## 同類比較          README 提及／依模型知識，未驗證
+## <工具名> 適用性    有效 profile 才產生
 ## 值得借鏡
 ## 技術棧
 ## 架構圖
@@ -145,11 +151,20 @@ stack: [TypeScript, Node.js]
 ```
 
 - 去重以 `repo_id` 為準，repo 改名或轉移也不會變成兩篇（沿用舊檔名，只更新 frontmatter 的 `repo`、`url`）。
-- `.json` 內容：上面所有欄位加 `stars_at`、閱讀頁用的 `intro`、`examples`、`requirements`、`summary`、`highlights`、`sightings`（`{id, at, source, note}`，以 `id` 即收藏檔名為身分，重跑不會重複追加）、`analyzed_at`、`analysis`（model、turns、wall_s、rounds、deepwiki、diagram）。2026-10-18 以前的條目把這些放在 frontmatter，讀取時會合併，下次寫回時搬進 `.json`。
+- `.json` 內容：上面所有欄位加 `stars_at`、閱讀頁用的 `intro`、`examples`、`requirements`、`summary`、`highlights`、`problems`、`strengths`、`limitations`、`alternatives`、`fit`、`sightings`（`{id, at, source, note}`，以 `id` 即收藏檔名為身分，重跑不會重複追加）、`analyzed_at`、`analysis`（model、turns、wall_s、rounds、deepwiki、diagram）。2026-10-18 以前的條目把這些放在 frontmatter，讀取時會合併，下次寫回時搬進 `.json`。
+
 - Action 只改 frontmatter 與 auto 標記之間的內容；不再產生「我的筆記」區（2026-10-18 使用者決定拿掉），但 end 標記之後若有人手寫內容，仍逐 byte 保留。
 - 來自模型或 GitHub metadata 的文字一律轉成純文字並跳脫 Markdown；裸網址與 email 包成 code span，不會變成可點的連結。
 - 同一個 repo 再收一次：只追加一筆 `sightings` 並更新星數，不重畫圖。重新分析靠 `workflow_dispatch`。
 - 內文只用標準 Markdown，不用 `[[wikilink]]` 等 Obsidian 專屬語法。
+
+### 個人工具 profile 與閱讀頁
+
+收藏庫根目錄可放 `profile.md`（不是公開範本或目標專案），第一個非空行為 `# pi agent` 這類工具名標題，後面描述能力與偏好。名稱 1–30 字，首字限英文、數字或中文，其餘可加空格及 `. + # / -`；正文移除控制字元，超過 4000 字截斷並警告。缺檔、不可讀、非 UTF-8 或標題不合法時警告並省略 fit，仍繼續分析。
+
+`action/scripts/profile.py resolve <profile.md> <state.json>` 是唯一判定處，寫出 `{tool, body}` 至模型不可讀寫的 `$RUNNER_TEMP/profile.json`；prompt 只讀這個狀態。`profile.py summary-args <state.json> --target <dir>` 每行印一個參數：`--target`、目標路徑，以及 `--expect-tool`、工具名，或 `--no-fit`。損壞狀態 fail closed。兩次 summary 驗證都重新建立 VARGS，保留目標 README 核對；不擴增工具、網路或 MCP 權限。
+
+閱讀頁提供解決什麼、優勢與限制、同類比較、工具適用性及原有三個分頁，七個分頁均可換行。缺欄位的舊條目不顯示新分頁並提示重新分析；手動執行收藏庫 workflow_dispatch 並填該 repo URL 即可重跑，不做批次遷移。
 
 ## 分析管線
 
@@ -166,6 +181,7 @@ stack: [TypeScript, Node.js]
    - 由腳本先對目標 repo 做淺層 clone。Claude 不發任何網路請求、不掛任何 MCP server。
    - 參考資料：clone 下來的程式碼與 README。（2026-10-19 拿掉 DeepWiki MCP：它是選用的，卻讓可能被 prompt injection 的 Claude 有一條對外送任意文字的通道。）
    - 輸出 `out/summary.json`：`tagline`（4–20 字白話副標，卡片的大字）、`intro`（30–300 字白話介紹）、`examples`（1–2 個使用情境、每個 10–120 字）、`requirements`（1–4 行使用門檻、每行 2–100 字）、`summary`（20–600 字、含中文）、`category`（taxonomy 之一）、`tags`（≤5，小寫）、`stack`（1–8 項）、`highlights`（2–3 句、每句 10–120 字、含中文）。限制寫在提示詞裡。
+ 新增必填 `problems`、`strengths`（各 2–4 項）、`limitations`（1–4 項），每項 10–120 字且含中文；`alternatives`（0–4 項）含 `name`（1–40 字）、`differs`（10–120 字中文）、`source`（`readme`／`model`）。只有 README 確實提到名稱才用 `readme`，否則以 `model` 標成未驗證；來源不符由 fix-summary 修正。有效 profile 才加 `fit`：`tool` 必須等於可信工具名，`verdict` 為 high／medium／low／none，`reasons` 為 1–3 項、`how` 為 1–3 項（none 才可空），每項 10–120 字中文。所有新欄位禁止 URL／HTML，名稱與列舉不要求中文。
    - 輸出 `out/diagram.svg`：照 arch-blueprint 畫，提示詞要求跳過確認步、改為檢查每個節點都對應到實際路徑。
    - 修正迴圈：Claude 沒有 shell。summary 不合格 → 把驗證錯誤交回同一個對話（`--resume`）修一次；`check.py` 不過 → 把錯誤交回修，最多 2 輪。
 3. **驗證與寫回（腳本，獨立 job）：**
@@ -219,11 +235,13 @@ Claude 讀的是陌生 repo 的內容，要當成可能含有 prompt injection �
 
 ## 成本
 
+報告加深後預估每筆 0.30–0.50 美元、約 40 回合；若需摘要修正，預估另加 0.03–0.08 美元。費用口徑與實際成本、回合、讀檔數待驗收實測決定；保留每次呼叫 4 美元、80 回合及既有逾時上限。
+
 | 項目 | 誰的資源 | 備註 |
 |---|---|---|
 | 收藏 repo | 使用者 | 私人 repo 免費 |
 | Actions | 使用者 | 私人 repo 免費方案每月 2000 分鐘。實測每筆新分析 3–9 分鐘（小 repo 約 2.5 分鐘、中型約 8 分鐘），重複收藏不到 1 分鐘 |
-| Claude | 使用者的訂閱 | 與日常使用共用額度 |
+| Claude | 使用者的訂閱 | 與日常使用共用額度；加深後預估每筆 0.30–0.50 美元，費用口徑及實際成本／回合／讀檔數待驗收實測決定 |
 | 收藏網頁 | 各自 fork 的 GitHub Pages | 免費 |
 
 ## 分階段計畫
