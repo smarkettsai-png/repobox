@@ -152,16 +152,25 @@ pi 只負責把收藏寫進 `inbox/`、查詢狀態與讀回結果,不參與分�
   - 更穩的做法是用獨立帳號或組織放 fork,或使用自訂網域。
 - PAT 遺失或裝置遺失時,立刻撤銷該 PAT。
 - 網頁已設 CSP;分析在無 Shell、只能讀指定目錄的受限 Claude Code 中執行。
-- 已設上限:單次最多處理 10 筆收藏,目標 repo 大小預檢 512000 KB,摘要 64 KiB,SVG 2 MiB。
+- 已設上限:單次最多處理 10 筆收藏,目標 repo 大小預檢 3000000 KB,每次 Claude 呼叫的金額上限 4 美元,摘要 64 KiB,SVG 2 MiB。
 
 ## 大小上限與 runner 空間
 
-- 收藏前,`analyze.yml` 用 GitHub 回報的 repo 大小(含完整歷史)與 `MAX_REPO_KB: 512000` 比較,超過就直接失敗,例如 `supabase/supabase` 約 2446 MB 會被擋下。
+- 收藏前,`analyze.yml` 用 GitHub 回報的 repo 大小(含完整歷史)與 `MAX_REPO_KB: 3000000`(約 2.9 GB)比較,超過就直接失敗。原本是 512000(約 500 MB),`supabase/supabase` 約 2446 MB 當時被擋下,現在可通過預檢。
 - 通過後以 `git clone --depth 1` 只抓最新一版到 runner 暫存目錄,clone 有 8 分鐘 timeout,分析有 20 分鐘 timeout。
 - 沒有手動釋放空間的步驟:runner 是用完即丟的虛擬機,job 結束整台銷毀,不會累積。clone 後刪除 `.git`、`CLAUDE.md`、`.mcp.json` 與 symlink 是為了安全,不是為了省空間。
-- 預檢看的是含歷史的大小,但實際只抓最新一版,所以 512000 KB 偏保守,被擋的專案不一定真的抓不下來。
+- 預檢看的是含歷史的大小,但實際只抓最新一版,所以預檢數字偏保守,被擋的專案不一定真的抓不下來。
 - 要放寬就改 `MAX_REPO_KB`,推到 fork,再把 library 的 `uses:` 換成新的 40 字元 SHA。放寬後仍受 runner 磁碟、timeout 與模型讀取量限制。
 - 失敗檔留在 `inbox/failed/` 不影響後續收藏;重試前可先刪掉。
+
+## 金額上限與實際用量
+
+- `analyze.yml` 的 `FLAGS` 有 `--max-budget-usd 4`:每次 `claude -p` 呼叫各自計算,超過就以結束碼 1 停止(`subtype` 為 `error_max_budget_usd`)。摘要修正與圖修正是獨立呼叫,各有自己的 4 美元。
+- 它是軟上限,每回合結束後才檢查,實測會小幅超標。
+- 流程不看 Claude 結束碼,而看產出檔案是否合格:預算耗盡時若摘要不完整,條目進 `inbox/failed/`,錯誤為 `summary: ...`;摘要完整只是圖沒畫完,則條目照常收錄、沒有圖。這個行為依程式碼推得,尚未端到端實測。
+- 每次 run 的 Step Summary(Verify outputs 步驟)會印出 `cost_usd per call`(每次呼叫的費用)與 `stop`(結束原因)。恢復的 session 可能回報累計費用,所以文件不把它們相加。
+- 第一筆成功分析(`google-research/harness2`)的實測:費用約 0.27 美元(API 換算價)、23 回合、455 秒、輸出約 10.4 萬 token(思考約 9.5 萬)。訂閱登入實際消耗的是訂閱額度,不是現金。
+- 私人 library 的 workflow 會消耗你的 Actions 分鐘數,一筆約 8 分鐘。
 
 ## 已知未驗證項目
 
@@ -176,6 +185,7 @@ pi 只負責把收藏寫進 `inbox/`、查詢狀態與讀回結果,不參與分�
 | 收藏後沒有 workflow 執行 | PAT 是否有 Contents: Read and write、是否選對 repo;library 的 Actions 是否啟用 |
 | workflow 找不到 `analyze.yml` | `uses:` 的 SHA 是否完整且存在於 fork;fork 是公開的 |
 | 條目進 `inbox/failed/` | 該檔內的錯誤原因;Secret 是否設定;模型是否過載 |
-| `inbox/failed/` 錯誤為 `resolve: repo too large` | 目標 repo 超過 `analyze.yml` 的 `MAX_REPO_KB`(512000 KB,約 500 MB),在 clone 前就被拒絕,不會呼叫 Claude。見下方「大小上限」 |
+| `inbox/failed/` 錯誤為 `resolve: repo too large` | 目標 repo 超過 `analyze.yml` 的 `MAX_REPO_KB`(目前 3000000 KB,約 2.9 GB),在 clone 前就被拒絕,不會呼叫 Claude。見下方「大小上限」 |
+| 條目失敗且錯誤為 `summary: ...`,run 摘要的 `stop` 為 `error_max_budget_usd` | 單次呼叫超過 `--max-budget-usd 4`。預算每回合結束後才檢查,可能小幅超標;可調高 `analyze.yml` 的數字 |
 | 手機分享選單沒有 RepoBox | 是否已安裝成 App;見 5.1 |
 | 網頁顯示尚未設定 | 是否在同一個瀏覽器、同一個 origin 設定;是否被清除網站資料 |

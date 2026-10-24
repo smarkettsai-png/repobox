@@ -184,7 +184,7 @@ Claude 讀的是陌生 repo 的內容，要當成可能含有 prompt injection �
 - 限制靠 CLI 參數強制，不靠提示詞：
   - Claude 在空的工作資料夾啟動，並使用 `--restricted`：不讀任何設定檔，檔案工具只能碰 `--add-dir` 列出的資料夾（目標 repo、arch-blueprint、`out/`）；另以 `--settings` 開 `blockReadsOutsideWorkingDirectories`，Read／Glob／Grep 再圍一次。
   - 啟動前遞迴刪除目標 repo 每一層的 `.claude/`、`.mcp.json`、`CLAUDE.md`、`CLAUDE.local.md` 和 `.git`；clone 用 `core.symlinks=false`、再刪掉所有 symlink，避免透過連結讀到資料夾外。
-  - clone 前透過 GitHub API 查詢 repo 大小（KB）；超過 `MAX_REPO_KB`（預設 `512000`，約 500 MiB）就以 `repo too large` 記錄該筆失敗，查詢失敗也記錄失敗，皆不自動重試；此為 API 大小初篩，並非 checkout 大小硬上限。
+  - clone 前透過 GitHub API 查詢 repo 大小（KB）；超過 `MAX_REPO_KB`（預設 `3000000`，約 2.9 GiB）就以 `repo too large` 記錄該筆失敗，查詢失敗也記錄失敗，皆不自動重試；此為 API 大小初篩，並非 checkout 大小硬上限。
   - `--tools Read Glob Grep Write Edit`：**沒有 Bash**。`--permission-mode dontAsk`，白名單外一律拒絕；白名單只有 `Read(//<target>/**)`、`Read(//<arch-blueprint>/**)`、`Read(//<out>/**)` 與 `Edit(//<out>/**)`（它同時放行該路徑的 Write；`//` 開頭才是絕對路徑），Glob／Grep 套用同一組 Read 規則；禁止讀取 `/proc`、禁止所有 `mcp__*`。
   - Claude token 只交給 `claude` 程序本身：step 一開始把它搬進不 export 的 shell 變數，`check.py`、`validate.py` 等解析模型輸出的腳本都拿不到。
   - `out/` 啟動時是空的、只放模型輸出；流程控制檔（item、meta、status、run 紀錄）放在 Claude 看不到的 `stage/`，上傳的是 `stage/`（2026-10-18 以正式參數本機演練：讀寫 `stage/` 都被拒）。

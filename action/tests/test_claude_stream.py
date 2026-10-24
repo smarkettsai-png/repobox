@@ -64,6 +64,14 @@ class ClaudeStreamTest(unittest.TestCase):
         self.assertEqual(r["session_id"], "sid-1")
         self.assertEqual(r["num_turns"], 3)
 
+    def test_result_costs_listed_per_call_and_non_numbers_ignored(self):
+        calls = [json.dumps({"type": "result", "total_cost_usd": 0.25}),
+                 json.dumps({"type": "result", "total_cost_usd": True}),
+                 json.dumps({"type": "result", "total_cost_usd": "1"}),
+                 json.dumps({"type": "result", "total_cost_usd": 0.5})]
+        self.assertEqual(claude_stream.summarize(calls)["result_costs_usd"], [0.25, 0.5])
+        self.assertEqual(claude_stream.summarize([])["result_costs_usd"], [])
+
     def test_bad_line_skipped(self):
         s = claude_stream.summarize(["garbage", *OK, "{not json"])
         self.assertEqual(s["tools"]["calls"], 4)

@@ -21,6 +21,7 @@ def summarize(lines: Iterable[str]) -> dict:
     by_name: Counter[str] = Counter()
     files: set[str] = set()
     result = None
+    costs: list[float] = []
     for line in lines:
         try:
             ev = json.loads(line)
@@ -38,9 +39,14 @@ def summarize(lines: Iterable[str]) -> dict:
                         files.add(path)
         elif ev.get("type") == "result":
             result = {k: v for k, v in ev.items() if k != "result"}
+            cost = ev.get("total_cost_usd")
+            if isinstance(cost, (int, float)) and not isinstance(cost, bool):
+                costs.append(cost)
             result["result_text"] = str(ev.get("result") or "")[:RESULT_TEXT_MAX]
     return {
         "result": result,
+        # One entry per claude call; resumed sessions may report cumulative cost, so do not sum.
+        "result_costs_usd": costs,
         "tools": {
             "by_name": dict(by_name),
             "calls": sum(by_name.values()),

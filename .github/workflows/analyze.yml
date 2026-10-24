@@ -17,7 +17,7 @@ permissions:
   contents: read
 
 env:
-  MAX_REPO_KB: 512000
+  MAX_REPO_KB: 3000000
   CLAUDE_CODE_VERSION: 2.1.302
   ARCH_BLUEPRINT_SHA: 3d48c959c889701fa9f02c14830f1a05d23aab6b
 
@@ -211,7 +211,7 @@ jobs:
           CHECK="$AB/skills/arch-blueprint/scripts/check.py"
           TAX=-; TAXARG=()
           if [ -f "$GITHUB_WORKSPACE/taxonomy.yml" ]; then TAX="$GITHUB_WORKSPACE/taxonomy.yml"; TAXARG=(--taxonomy "$TAX"); fi
-          FLAGS=(--model claude-haiku-5-5 --effort xhigh --output-format stream-json --verbose
+          FLAGS=(--model claude-haiku-5-5 --effort xhigh --max-budget-usd 4 --output-format stream-json --verbose
             --restricted --permission-mode dontAsk
             --tools Read Glob Grep Write Edit
             --strict-mcp-config
@@ -280,7 +280,7 @@ jobs:
           {
             echo "## $FULL"
             jq -r '"- status: \(.status)  diagram: \(.diagram)  fix rounds: \(.rounds)  wall: \(.wall_s)s  claude exit: \(.claude_exit)\n- error: \(.error // "-")"' "$STAGE/status.json"
-            jq -r '"- turns: \(.result.num_turns // "?")  deepwiki: \(.tools.deepwiki)  files read: \(.tools.files_read)  tools: \(.tools.by_name | to_entries | map("\(.key)=\(.value)") | join(", "))"' "$STAGE/run.json" 2>/dev/null || echo "- run.json missing"
+            jq -r '"- turns: \(.result.num_turns // "?")  cost_usd per call: \(.result_costs_usd // [] | map(tostring) | join(", "))  stop: \(.result.subtype // "?")  deepwiki: \(.tools.deepwiki)  files read: \(.tools.files_read)  tools: \(.tools.by_name | to_entries | map("\(.key)=\(.value)") | join(", "))"' "$STAGE/run.json" 2>/dev/null || echo "- run.json missing"
           } >> "$GITHUB_STEP_SUMMARY"
           cat "$GITHUB_STEP_SUMMARY"
 
