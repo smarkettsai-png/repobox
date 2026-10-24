@@ -211,7 +211,7 @@ jobs:
           CHECK="$AB/skills/arch-blueprint/scripts/check.py"
           TAX=-; TAXARG=()
           if [ -f "$GITHUB_WORKSPACE/taxonomy.yml" ]; then TAX="$GITHUB_WORKSPACE/taxonomy.yml"; TAXARG=(--taxonomy "$TAX"); fi
-          FLAGS=(--model opus --output-format stream-json --verbose
+          FLAGS=(--model claude-haiku-5-5 --effort xhigh --output-format stream-json --verbose
             --restricted --permission-mode dontAsk
             --tools Read Glob Grep Write Edit
             --strict-mcp-config
